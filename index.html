@@ -628,6 +628,12 @@
 <div class="form-group"><label class="form-label">Fecha de inicio</label><input class="form-control" id="med-start" type="date"/></div>
 <div class="form-group"><label class="form-label">Estado</label><select class="form-control" id="med-status"><option value="activo">Activo</option><option value="suspendido">Suspendido</option></select></div>
 </div>
+<div class="form-group">
+  <label class="form-label">Seleccionar médico de contactos</label>
+  <select class="form-control" id="med-doc-select" onchange="fillMedDoctor(this.value)">
+    <option value="">— Elegir de mis médicos registrados —</option>
+  </select>
+</div>
 <div class="form-group"><label class="form-label">Médico que lo recetó</label><input class="form-control" id="med-doctor" placeholder="Nombre del médico"/></div>
 <div class="form-group"><label class="form-label">Indicaciones especiales</label><textarea class="form-control" id="med-notes" placeholder="Ej: Tomar con alimentos, evitar sol..." rows="2"></textarea></div>
 <div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-med')">Cancelar</button><button class="btn btn-primary" onclick="saveMed()"><i class="fas fa-save"></i> Guardar</button></div>
@@ -1153,7 +1159,7 @@ function openModal(id) {
   document.getElementById(id).classList.add('open');
   if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); populateRecordDoctorSelector(); }
   if (id === 'modal-appt') { document.getElementById('appt-date').value = today(); populateDoctorSelector(); document.getElementById('appt-new-doc-hint').style.display = 'none'; }
-  if (id === 'modal-med') document.getElementById('med-start').value = today();
+  if (id === 'modal-med') { document.getElementById('med-start').value = today(); populateMedDoctorSelector(); }
   if (id === 'modal-share') document.getElementById('share-link').value = window.location.href;
 }
 
@@ -1878,6 +1884,22 @@ function filterMeds(f, el) {
   renderMeds();
 }
 
+function populateMedDoctorSelector() {
+  const sel = document.getElementById('med-doc-select'); if (!sel) return;
+  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
+    sel.appendChild(opt);
+  });
+}
+
+function fillMedDoctor(docId) {
+  if (!docId) return;
+  const d = docs.find(x => x.id === docId); if (!d) return;
+  document.getElementById('med-doctor').value = d.name;
+}
+
 async function saveMed() {
   const name = document.getElementById('med-name').value.trim();
   const dose = document.getElementById('med-dose').value.trim();
@@ -1888,6 +1910,7 @@ async function saveMed() {
   addActivity('fas fa-pills', '#f0a500', 'Medicamento agregado: ' + name + ' ' + dose);
   closeModal('modal-med');
   ['med-name','med-dose','med-doctor','med-notes','med-start'].forEach(id => document.getElementById(id).value = '');
+  const medSel = document.getElementById('med-doc-select'); if (medSel) medSel.value = '';
   renderDashboard(); toast('Medicamento guardado');
 }
 
