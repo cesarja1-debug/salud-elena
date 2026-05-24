@@ -1,0 +1,2168 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Salud Elena – Portal de Salud</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&amp;family=Raleway:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+<!-- Microsoft Graph API - OAuth2 PKCE, no external libraries needed -->
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#f0f7f4;--bg2:#ffffff;--primary:#2a7d5f;--primary-light:#3aaa80;--primary-dark:#1d5c45;
+    --accent:#e8f5f0;--accent2:#f7c948;--ink:#1a2e25;--ink2:#4a6358;--ink3:#7a9e8e;
+    --danger:#e05252;--warning:#f0a500;--info:#3a8fc4;--border:#d0e8de;
+    --shadow:0 2px 12px rgba(42,125,95,0.10);--shadow-lg:0 8px 32px rgba(42,125,95,0.15);
+    --radius:14px;--radius-sm:8px;--sidebar-w:260px;
+  }
+  body{font-family:'Raleway',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;}
+
+  /* TOP BAR */
+  .topbar{background:var(--primary-dark);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:60px;position:fixed;top:0;left:0;right:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.18);}
+  .topbar-brand{display:flex;align-items:center;gap:10px;font-family:'Lora',serif;font-size:1.25rem;font-weight:700;letter-spacing:.3px;}
+  .topbar-brand i{font-size:1.4rem;color:var(--accent2);}
+  .topbar-right{display:flex;align-items:center;gap:14px;}
+  .topbar-user{display:flex;align-items:center;gap:8px;font-size:.9rem;font-weight:500;}
+  .avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#fff;border:2px solid rgba(255,255,255,0.3);}
+  .topbar-btn{background:rgba(255,255,255,0.12);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:.82rem;font-family:'Raleway',sans-serif;font-weight:600;transition:background .2s;}
+  .topbar-btn:hover{background:rgba(255,255,255,0.22);}
+  /* Bell button with badge */
+  .bell-btn{position:relative;background:rgba(255,255,255,0.12);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:background .2s;}
+  .bell-btn:hover{background:rgba(255,255,255,0.25);}
+  .bell-badge{position:absolute;top:-3px;right:-3px;background:var(--danger);color:#fff;font-size:.6rem;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary-dark);}
+  .bell-badge.hidden{display:none;}
+
+  /* SIDEBAR */
+  .sidebar{position:fixed;top:60px;left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;z-index:90;padding:20px 0;box-shadow:2px 0 8px rgba(42,125,95,0.06);}
+  .sidebar-section{padding:6px 20px 4px;font-size:.7rem;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:1.2px;margin-top:10px;}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:11px 22px;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--ink2);border-left:3px solid transparent;transition:all .18s;text-decoration:none;}
+  .nav-item:hover{background:var(--accent);color:var(--primary);border-left-color:var(--primary-light);}
+  .nav-item.active{background:var(--accent);color:var(--primary);border-left-color:var(--primary);font-weight:700;}
+  .nav-item i{width:20px;text-align:center;font-size:1rem;}
+  .nav-badge{margin-left:auto;background:var(--primary);color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;}
+
+  /* MAIN */
+  .main{margin-left:var(--sidebar-w);margin-top:60px;padding:30px;min-height:calc(100vh - 60px);}
+  .page{display:none;}.page.active{display:block;}
+
+  /* PAGE HEADER */
+  .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;}
+  .page-title{font-family:'Lora',serif;font-size:1.7rem;font-weight:700;color:var(--ink);}
+  .page-title span{color:var(--primary);}
+  .page-subtitle{font-size:.88rem;color:var(--ink3);margin-top:3px;}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 20px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-family:'Raleway',sans-serif;font-size:.88rem;font-weight:600;transition:all .18s;}
+  .btn-primary{background:var(--primary);color:#fff;}.btn-primary:hover{background:var(--primary-dark);}
+  .btn-outline{background:transparent;color:var(--primary);border:1.5px solid var(--primary);}.btn-outline:hover{background:var(--accent);}
+  .btn-danger{background:var(--danger);color:#fff;}.btn-danger:hover{background:#c04040;}
+  .btn-warning{background:var(--warning);color:#fff;}.btn-warning:hover{background:#d09000;}
+  .btn-sm{padding:6px 14px;font-size:.8rem;}
+
+  /* CARDS */
+  .card{background:var(--bg2);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:22px;}
+  .card-title{font-family:'Lora',serif;font-size:1.05rem;font-weight:700;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .card-title i{color:var(--primary);}
+
+  /* STATS */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px;margin-bottom:28px;}
+  .stat-card{background:var(--bg2);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:20px 22px;display:flex;align-items:center;gap:16px;}
+  .stat-icon{width:50px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
+  .stat-icon.green{background:#e8f5f0;color:var(--primary);}
+  .stat-icon.blue{background:#e8f2fa;color:var(--info);}
+  .stat-icon.yellow{background:#fef9e7;color:var(--warning);}
+  .stat-icon.red{background:#fdeaea;color:var(--danger);}
+  .stat-info .stat-num{font-size:1.7rem;font-weight:700;color:var(--ink);line-height:1;}
+  .stat-info .stat-label{font-size:.78rem;color:var(--ink3);margin-top:3px;font-weight:500;}
+
+  /* TABLE */
+  .table-wrap{overflow-x:auto;border-radius:var(--radius-sm);}
+  table{width:100%;border-collapse:collapse;font-size:.88rem;}
+  thead th{background:var(--accent);color:var(--primary-dark);font-weight:700;padding:11px 14px;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+  tbody tr:hover{background:#f7fbf9;}
+  tbody td{padding:11px 14px;color:var(--ink2);vertical-align:middle;}
+  .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600;}
+  .tag-green{background:#e8f5f0;color:var(--primary);}
+  .tag-blue{background:#e8f2fa;color:var(--info);}
+  .tag-yellow{background:#fef9e7;color:var(--warning);}
+  .tag-red{background:#fdeaea;color:var(--danger);}
+  .tag-gray{background:#f0f0f0;color:#666;}
+  .tag-orange{background:#fff3e0;color:#e65100;}
+
+  /* MODAL */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-lg);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:30px;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+  .modal-title{font-family:'Lora',serif;font-size:1.2rem;font-weight:700;color:var(--ink);}
+  .modal-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--ink3);padding:4px;}
+  .modal-close:hover{color:var(--danger);}
+
+  /* FORM */
+  .form-group{margin-bottom:16px;}
+  .form-label{display:block;font-size:.83rem;font-weight:600;color:var(--ink2);margin-bottom:5px;}
+  .form-control{width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:'Raleway',sans-serif;font-size:.9rem;color:var(--ink);background:#fff;transition:border .18s;}
+  .form-control:focus{outline:none;border-color:var(--primary);}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+
+  /* PILL TABS */
+  .pill-tabs{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;}
+  .pill-tab{padding:7px 18px;border-radius:20px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:.83rem;font-weight:600;color:var(--ink2);transition:all .18s;}
+  .pill-tab.active,.pill-tab:hover{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+  /* SEARCH BAR */
+  .search-bar{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;margin-bottom:20px;}
+  .search-bar i{color:var(--ink3);}
+  .search-bar input{border:none;outline:none;font-family:'Raleway',sans-serif;font-size:.9rem;color:var(--ink);flex:1;background:transparent;}
+
+  /* MED CARD */
+  .med-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+  .med-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .med-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--primary);}
+  .med-name{font-family:'Lora',serif;font-size:1rem;font-weight:700;color:var(--ink);margin-bottom:6px;}
+  .med-dose{font-size:.82rem;color:var(--primary);font-weight:600;margin-bottom:8px;}
+  .med-detail{font-size:.8rem;color:var(--ink2);display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+  .med-detail i{color:var(--ink3);width:14px;}
+  .med-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+
+  /* DOC CARD */
+  .doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+  .doc-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);display:flex;gap:14px;}
+  .doc-avatar{width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:var(--primary);flex-shrink:0;}
+  .doc-info .doc-name{font-weight:700;font-size:.95rem;color:var(--ink);}
+  .doc-info .doc-spec{font-size:.78rem;color:var(--primary);font-weight:600;margin-bottom:6px;}
+  .doc-info .doc-detail{font-size:.78rem;color:var(--ink2);display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+  .doc-info .doc-detail i{color:var(--ink3);width:12px;}
+
+  /* NOTE CARD */
+  .note-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+  .note-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .note-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
+  .note-title{font-weight:700;font-size:.92rem;color:var(--ink);}
+  .note-date{font-size:.73rem;color:var(--ink3);}
+  .note-body{font-size:.83rem;color:var(--ink2);line-height:1.6;}
+  .note-footer{margin-top:10px;display:flex;align-items:center;gap:8px;}
+  .note-author{font-size:.75rem;color:var(--ink3);display:flex;align-items:center;gap:5px;}
+
+  /* UPCOMING APPT BANNER */
+  .appt-upcoming{background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;border-radius:var(--radius);padding:20px 24px;margin-bottom:22px;display:flex;align-items:center;gap:18px;}
+  .appt-upcoming i{font-size:2rem;opacity:.8;}
+  .appt-upcoming .appt-label{font-size:.78rem;opacity:.8;font-weight:600;text-transform:uppercase;letter-spacing:.8px;}
+  .appt-upcoming .appt-name{font-family:'Lora',serif;font-size:1.15rem;font-weight:700;margin:2px 0;}
+  .appt-upcoming .appt-meta{font-size:.83rem;opacity:.85;}
+
+  /* EMPTY STATE */
+  .empty-state{text-align:center;padding:50px 20px;color:var(--ink3);}
+  .empty-state i{font-size:3rem;margin-bottom:14px;opacity:.4;}
+  .empty-state p{font-size:.9rem;}
+
+  /* ACTIVITY FEED */
+  .activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+  .activity-item:last-child{border-bottom:none;}
+  .activity-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0;}
+  .activity-text{font-size:.83rem;color:var(--ink2);line-height:1.5;}
+  .activity-time{font-size:.73rem;color:var(--ink3);margin-top:2px;}
+
+  /* ══ ALERT BANNER (new) ══ */
+  .alert-banner{border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;display:flex;align-items:flex-start;gap:14px;border-left:4px solid;}
+  .alert-banner.alert-urgent{background:#fdeaea;border-color:var(--danger);}
+  .alert-banner.alert-warning{background:#fff8e1;border-color:var(--warning);}
+  .alert-banner.alert-info{background:#e8f2fa;border-color:var(--info);}
+  .alert-banner.alert-med{background:#f3e8ff;border-color:#8b5cf6;}
+  .alert-banner-icon{font-size:1.2rem;margin-top:1px;flex-shrink:0;}
+  .alert-urgent .alert-banner-icon{color:var(--danger);}
+  .alert-warning .alert-banner-icon{color:var(--warning);}
+  .alert-info .alert-banner-icon{color:var(--info);}
+  .alert-med .alert-banner-icon{color:#8b5cf6;}
+  .alert-banner-body{flex:1;}
+  .alert-banner-title{font-weight:700;font-size:.88rem;color:var(--ink);}
+  .alert-banner-desc{font-size:.8rem;color:var(--ink2);margin-top:2px;}
+  .alert-dismiss{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:.9rem;padding:2px 6px;border-radius:4px;margin-left:auto;flex-shrink:0;}
+  .alert-dismiss:hover{color:var(--danger);}
+
+  /* ══ NOTIFICATION PANEL (new) ══ */
+  .notif-panel{position:fixed;top:60px;right:0;width:360px;height:calc(100vh - 60px);background:#fff;border-left:1px solid var(--border);box-shadow:-4px 0 20px rgba(0,0,0,0.1);z-index:150;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow-y:auto;}
+  .notif-panel.open{transform:translateX(0);}
+  .notif-panel-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1;}
+  .notif-panel-title{font-family:'Lora',serif;font-size:1rem;font-weight:700;color:var(--ink);}
+  .notif-close{background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink3);}
+  .notif-close:hover{color:var(--danger);}
+  .notif-item{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;gap:12px;cursor:default;transition:background .15s;}
+  .notif-item:hover{background:var(--bg);}
+  .notif-item.unread{background:#f7fbf9;}
+  .notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+  .notif-dot.urgent{background:var(--danger);}
+  .notif-dot.warning{background:var(--warning);}
+  .notif-dot.info{background:var(--info);}
+  .notif-dot.med{background:#8b5cf6;}
+  .notif-dot.read{background:var(--border);}
+  .notif-text{font-size:.83rem;color:var(--ink2);line-height:1.5;}
+  .notif-time{font-size:.72rem;color:var(--ink3);margin-top:3px;}
+  .notif-empty{text-align:center;padding:40px 20px;color:var(--ink3);}
+  .notif-empty i{font-size:2.5rem;opacity:.3;margin-bottom:10px;}
+
+  /* ══ REMINDER SETTINGS (new) ══ */
+  .reminder-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+  .reminder-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:16px;}
+  .reminder-card.active-reminder{border-color:var(--primary);background:var(--accent);}
+  .reminder-card-title{font-weight:700;font-size:.88rem;color:var(--ink);margin-bottom:4px;display:flex;align-items:center;gap:7px;}
+  .reminder-card-desc{font-size:.78rem;color:var(--ink2);}
+  /* Toggle switch */
+  .toggle-wrap{display:flex;align-items:center;gap:10px;margin-top:10px;}
+  .toggle{position:relative;width:42px;height:22px;flex-shrink:0;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .toggle-slider{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.3s;}
+  .toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;}
+  .toggle input:checked+.toggle-slider{background:var(--primary);}
+  .toggle input:checked+.toggle-slider::before{transform:translateX(20px);}
+  .toggle-label{font-size:.82rem;color:var(--ink2);font-weight:500;}
+
+  /* Med schedule times */
+  .time-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .time-chip{background:var(--accent);color:var(--primary);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:600;display:flex;align-items:center;gap:5px;}
+  .time-chip button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:.7rem;padding:0;}
+  .time-chip button:hover{color:var(--danger);}
+
+  /* Permission banner */
+  .perm-banner{background:linear-gradient(135deg,#1d5c45,#2a7d5f);color:#fff;border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;}
+  .perm-banner i{font-size:1.5rem;opacity:.85;}
+  .perm-banner-text{flex:1;font-size:.85rem;line-height:1.5;}
+  .perm-banner-text strong{display:block;font-size:.95rem;margin-bottom:2px;}
+
+  /* RESPONSIVE */
+  @media(max-width:768px){
+    .sidebar{transform:translateX(-100%);transition:transform .25s;}
+    .sidebar.open{transform:translateX(0);}
+    .main{margin-left:0;}
+    .form-row{grid-template-columns:1fr;}
+    .topbar-brand span{display:none;}
+    .notif-panel{width:100%;}
+    .reminder-grid{grid-template-columns:1fr;}
+  }
+  .menu-toggle{display:none;background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;}
+  @media(max-width:768px){.menu-toggle{display:block;}}
+
+  /* ══ PDF UPLOAD ══ */
+  .pdf-upload-area{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;transition:all .2s;background:#fafafa;margin-bottom:8px;}
+  .pdf-upload-area:hover,.pdf-upload-area.dragover{border-color:var(--primary);background:var(--accent);}
+  .pdf-upload-area i{font-size:1.8rem;color:var(--ink3);margin-bottom:6px;}
+  .pdf-upload-area p{font-size:.82rem;color:var(--ink3);}
+  .pdf-upload-area.has-file{border-color:var(--primary);background:var(--accent);}
+  .pdf-upload-area.has-file i{color:var(--primary);}
+  .pdf-upload-area.has-file p{color:var(--primary);font-weight:600;}
+  .pdf-progress{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px;display:none;}
+  .pdf-progress-bar{height:100%;background:var(--primary);border-radius:3px;transition:width .3s;width:0%;}
+  .pdf-attached{display:flex;align-items:center;gap:10px;background:var(--accent);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:.82rem;}
+  .pdf-attached i{color:var(--danger);font-size:1.1rem;}
+  .pdf-attached a{color:var(--primary);font-weight:600;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pdf-attached a:hover{text-decoration:underline;}
+  .pdf-attached .pdf-del{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:.85rem;padding:2px 6px;border-radius:4px;}
+  .pdf-attached .pdf-del:hover{color:var(--danger);}
+  .pdf-size{font-size:.72rem;color:var(--ink3);}
+
+  /* Toast */
+  #toast{position:fixed;bottom:28px;right:28px;background:var(--primary-dark);color:#fff;padding:12px 22px;border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);font-size:.88rem;font-weight:600;z-index:999;display:none;align-items:center;gap:10px;}
+
+  /* ══ FIREBASE LOGIN SCREEN ══ */
+  #login-screen{position:fixed;inset:0;background:linear-gradient(135deg,var(--primary-dark) 0%,var(--primary) 60%,var(--primary-light) 100%);z-index:500;display:flex;align-items:center;justify-content:center;}
+  .login-card{background:#fff;border-radius:20px;padding:40px 36px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.25);text-align:center;}
+  .login-logo{font-size:3rem;color:var(--accent2);margin-bottom:8px;}
+  .login-title{font-family:'Lora',serif;font-size:1.8rem;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .login-subtitle{font-size:.88rem;color:var(--ink3);margin-bottom:28px;}
+  .login-input{width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:'Raleway',sans-serif;font-size:.95rem;color:var(--ink);margin-bottom:12px;text-align:center;letter-spacing:2px;}
+  .login-input:focus{outline:none;border-color:var(--primary);}
+  .login-btn{width:100%;padding:13px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-family:'Raleway',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s;margin-bottom:10px;}
+  .login-btn:hover{background:var(--primary-dark);}
+  .login-btn-create{width:100%;padding:11px;background:transparent;color:var(--primary);border:1.5px solid var(--primary);border-radius:var(--radius-sm);font-family:'Raleway',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;}
+  .login-btn-create:hover{background:var(--accent);}
+  .login-error{color:var(--danger);font-size:.82rem;margin-bottom:10px;display:none;}
+  .login-info{font-size:.78rem;color:var(--ink3);margin-top:16px;line-height:1.6;}
+
+  /* ══ SYNC INDICATOR ══ */
+  .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+  .sync-dot.synced{background:#4ade80;}
+  .sync-dot.syncing{background:var(--accent2);animation:pulse 1s infinite;}
+  .sync-dot.offline{background:var(--danger);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  .sync-status{display:flex;align-items:center;font-size:.75rem;color:rgba(255,255,255,0.75);gap:4px;}
+</style>
+</head>
+<body>
+<!-- TOP BAR -->
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><i class="fas fa-heart-pulse"></i></div>
+    <div class="login-title">Salud Elena</div>
+    <div class="login-subtitle">Portal familiar de salud · Acceso seguro</div>
+    <div id="login-error" class="login-error"></div>
+    <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px;line-height:1.6;">Inicia sesion con tu cuenta de Microsoft para acceder a los datos de salud de Elena guardados en tu OneDrive.</p>
+    <button class="login-btn" id="ms-login-btn" onclick="loginWithMicrosoft()">
+      <svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      Iniciar sesion con Microsoft
+    </button>
+    <div class="login-info" style="margin-top:16px;">
+      Los datos se guardan en tu <strong>OneDrive/SaludElena/</strong> y son accesibles para todos los familiares que usen la misma cuenta Microsoft.
+    </div>
+  </div>
+</div>
+
+<header class="topbar">
+<div style="display:flex;align-items:center;gap:14px;">
+<button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="topbar-brand"><i class="fas fa-heart-pulse"></i><span>Salud Elena</span></div>
+</div>
+<div class="topbar-right">
+<!-- Bell notification button -->
+<div class="sync-status" id="sync-status"><span class="sync-dot synced" id="sync-dot"></span><span id="sync-text">Sincronizado</span></div>
+<button class="bell-btn" onclick="toggleNotifPanel()" title="Notificaciones">
+<i class="fas fa-bell"></i>
+<span class="bell-badge hidden" id="bell-badge">0</span>
+</button>
+<button class="topbar-btn" onclick="showFamilyCode()" title="Ver código de familia"><i class="fas fa-users"></i> <span id="topbar-family-code"></span></button>
+<button class="topbar-btn" onclick="openModal('modal-share')"><i class="fas fa-share-nodes"></i> Compartir</button>
+<button class="topbar-btn" onclick="logoutFamily()" style="background:rgba(255,255,255,0.08);" title="Cerrar sesión"><i class="fas fa-right-from-bracket"></i></button>
+<div class="topbar-user">
+<div class="avatar" id="user-avatar">YO</div>
+<span id="user-name" style="font-size:.85rem;">Mi Cuenta</span>
+</div>
+</div>
+</header>
+<!-- NOTIFICATION PANEL (slide-in) -->
+<div class="notif-panel" id="notif-panel">
+<div class="notif-panel-header">
+<div class="notif-panel-title"><i class="fas fa-bell" style="color:var(--primary);margin-right:7px;"></i>Notificaciones</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<button class="btn btn-outline btn-sm" onclick="markAllRead()" style="font-size:.72rem;padding:4px 10px;">Marcar leídas</button>
+<button class="notif-close" onclick="toggleNotifPanel()"><i class="fas fa-xmark"></i></button>
+</div>
+</div>
+<div id="notif-list"></div>
+</div>
+<div id="notif-overlay" onclick="toggleNotifPanel()" style="display:none;position:fixed;inset:0;z-index:140;"></div>
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-section">Principal</div>
+<a class="nav-item active" onclick="showPage('dashboard',this)"><i class="fas fa-house-medical"></i> Panel Principal</a>
+<div class="sidebar-section">Salud</div>
+<a class="nav-item" onclick="showPage('records',this)"><i class="fas fa-file-medical"></i> Registros de Salud<span class="nav-badge" id="badge-records">0</span></a>
+<a class="nav-item" onclick="showPage('appointments',this)"><i class="fas fa-calendar-check"></i> Citas Médicas<span class="nav-badge" id="badge-appts">0</span></a>
+<a class="nav-item" onclick="showPage('medications',this)"><i class="fas fa-pills"></i> Medicamentos<span class="nav-badge" id="badge-meds">0</span></a>
+<div class="sidebar-section">Información</div>
+<a class="nav-item" onclick="showPage('doctors',this)"><i class="fas fa-user-doctor"></i> Médicos y Contactos<span class="nav-badge" id="badge-docs">0</span></a>
+<a class="nav-item" onclick="showPage('notes',this)"><i class="fas fa-notes-medical"></i> Notas y Observaciones<span class="nav-badge" id="badge-notes">0</span></a>
+<div class="sidebar-section">Sistema</div>
+<a class="nav-item" onclick="showPage('reminders',this)"><i class="fas fa-bell"></i> Recordatorios<span class="nav-badge" id="badge-reminders" style="background:var(--warning);">0</span></a>
+</nav>
+<!-- MAIN CONTENT -->
+<main class="main">
+<!-- ══ DASHBOARD ══ -->
+<div class="page active" id="page-dashboard">
+<div class="page-header">
+<div>
+<div class="page-title">Panel Principal <span id="dash-greeting"></span></div>
+<div class="page-subtitle">Resumen del estado de salud de mamá</div>
+</div>
+<button class="btn btn-primary" onclick="showPage('appointments',document.querySelector('[onclick*=appointments]'))"><i class="fas fa-plus"></i> Nueva Cita</button>
+</div>
+<!-- Active alerts banner -->
+<div id="dash-alerts"></div>
+<!-- Stats -->
+<div class="stats-grid">
+<div class="stat-card"><div class="stat-icon green"><i class="fas fa-file-medical"></i></div><div class="stat-info"><div class="stat-num" id="stat-records">0</div><div class="stat-label">Registros de Salud</div></div></div>
+<div class="stat-card"><div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div><div class="stat-info"><div class="stat-num" id="stat-appts">0</div><div class="stat-label">Citas Programadas</div></div></div>
+<div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-pills"></i></div><div class="stat-info"><div class="stat-num" id="stat-meds">0</div><div class="stat-label">Medicamentos Activos</div></div></div>
+<div class="stat-card"><div class="stat-icon red"><i class="fas fa-user-doctor"></i></div><div class="stat-info"><div class="stat-num" id="stat-docs">0</div><div class="stat-label">Médicos Registrados</div></div></div>
+</div>
+<div id="dash-next-appt"></div>
+<!-- Today's medication schedule -->
+<div id="dash-med-schedule" style="margin-bottom:20px;"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+<div class="card"><div class="card-title"><i class="fas fa-calendar-days"></i> Próximas Citas</div><div id="dash-appts-list"><div class="empty-state"><i class="fas fa-calendar-xmark"></i><p>No hay citas próximas</p></div></div></div>
+<div class="card"><div class="card-title"><i class="fas fa-clock-rotate-left"></i> Actividad Reciente</div><div id="dash-activity"><div class="empty-state"><i class="fas fa-inbox"></i><p>Sin actividad reciente</p></div></div></div>
+</div>
+</div>
+<!-- ══ REGISTROS ══ -->
+<div class="page" id="page-records">
+<div class="page-header"><div><div class="page-title"><span>Registros</span> de Salud</div><div class="page-subtitle">Historial médico, diagnósticos y documentos</div></div><button class="btn btn-primary" onclick="openModal('modal-record')"><i class="fas fa-plus"></i> Nuevo Registro</button></div>
+<div class="pill-tabs" id="record-tabs">
+<div class="pill-tab active" onclick="filterRecords('todos',this)">Todos</div>
+<div class="pill-tab" onclick="filterRecords('diagnóstico',this)">Diagnósticos</div>
+<div class="pill-tab" onclick="filterRecords('laboratorio',this)">Laboratorio</div>
+<div class="pill-tab" onclick="filterRecords('imagen',this)">Imágenes</div>
+<div class="pill-tab" onclick="filterRecords('cirugía',this)">Cirugías</div>
+</div>
+<div class="search-bar"><i class="fas fa-magnifying-glass"></i><input id="search-records" oninput="searchRecords(this.value)" placeholder="Buscar registros..." type="text"/></div>
+<div class="card"><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Médico</th><th>Notas</th><th>Acciones</th></tr></thead><tbody id="records-tbody"></tbody></table></div><div class="empty-state" id="records-empty" style="display:none;"><i class="fas fa-folder-open"></i><p>No hay registros. Agrega el primero.</p></div></div>
+</div>
+<!-- ══ CITAS ══ -->
+<div class="page" id="page-appointments">
+<div class="page-header"><div><div class="page-title"><span>Citas</span> Médicas</div><div class="page-subtitle">Agenda y seguimiento de consultas</div></div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-outline" onclick="exportAllApptICS()" title="Exportar todas las citas próximas al calendario"><i class="fas fa-calendar-arrow-up"></i> Exportar al Calendario</button><button class="btn btn-primary" onclick="openModal('modal-appt')"><i class="fas fa-plus"></i> Nueva Cita</button></div></div>
+<div class="pill-tabs">
+<div class="pill-tab active" onclick="filterAppts('todas',this)">Todas</div>
+<div class="pill-tab" onclick="filterAppts('próxima',this)">Próximas</div>
+<div class="pill-tab" onclick="filterAppts('completada',this)">Completadas</div>
+<div class="pill-tab" onclick="filterAppts('cancelada',this)">Canceladas</div>
+</div>
+<div class="card"><div class="table-wrap"><table><thead><tr><th>Fecha y Hora</th><th>Médico / Especialidad</th><th>Motivo</th><th>Lugar</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="appts-tbody"></tbody></table></div><div class="empty-state" id="appts-empty" style="display:none;"><i class="fas fa-calendar-xmark"></i><p>No hay citas registradas.</p></div></div>
+</div>
+<!-- ══ MEDICAMENTOS ══ -->
+<div class="page" id="page-medications">
+<div class="page-header"><div><div class="page-title"><span>Medicamentos</span></div><div class="page-subtitle">Lista de medicamentos activos y tratamientos</div></div><button class="btn btn-primary" onclick="openModal('modal-med')"><i class="fas fa-plus"></i> Agregar Medicamento</button></div>
+<div class="pill-tabs">
+<div class="pill-tab active" onclick="filterMeds('todos',this)">Todos</div>
+<div class="pill-tab" onclick="filterMeds('activo',this)">Activos</div>
+<div class="pill-tab" onclick="filterMeds('suspendido',this)">Suspendidos</div>
+</div>
+<div class="med-grid" id="meds-grid"></div>
+<div class="empty-state" id="meds-empty" style="display:none;"><i class="fas fa-prescription-bottle"></i><p>No hay medicamentos registrados.</p></div>
+</div>
+<!-- ══ MÉDICOS ══ -->
+<div class="page" id="page-doctors">
+<div class="page-header"><div><div class="page-title"><span>Médicos</span> y Contactos</div><div class="page-subtitle">Directorio de profesionales de salud</div></div><button class="btn btn-primary" onclick="openAddDoc()"><i class="fas fa-plus"></i> Agregar Médico</button></div>
+<div class="search-bar"><i class="fas fa-magnifying-glass"></i><input oninput="searchDocs(this.value)" placeholder="Buscar médico..." type="text"/></div>
+<div class="doc-grid" id="docs-grid"></div>
+<div class="empty-state" id="docs-empty" style="display:none;"><i class="fas fa-user-doctor"></i><p>No hay médicos registrados.</p></div>
+</div>
+<!-- ══ NOTAS ══ -->
+<div class="page" id="page-notes">
+<div class="page-header"><div><div class="page-title"><span>Notas</span> y Observaciones</div><div class="page-subtitle">Comentarios y seguimiento familiar</div></div><button class="btn btn-primary" onclick="openModal('modal-note')"><i class="fas fa-plus"></i> Nueva Nota</button></div>
+<div class="note-grid" id="notes-grid"></div>
+<div class="empty-state" id="notes-empty" style="display:none;"><i class="fas fa-notes-medical"></i><p>No hay notas registradas.</p></div>
+</div>
+<!-- ══ RECORDATORIOS (NEW PAGE) ══ -->
+<div class="page" id="page-reminders">
+<div class="page-header">
+<div><div class="page-title"><span>Recordatorios</span> y Alertas</div><div class="page-subtitle">Configura notificaciones automáticas para citas y medicamentos</div></div>
+<button class="btn btn-primary" onclick="requestNotifPermission()"><i class="fas fa-bell"></i> Activar Notificaciones</button>
+</div>
+<!-- Permission banner -->
+<div class="perm-banner" id="perm-banner" style="display:none;">
+<i class="fas fa-bell-slash"></i>
+<div class="perm-banner-text">
+<strong>Activa las notificaciones del navegador</strong>
+        Para recibir alertas automáticas de citas y medicamentos, necesitas permitir las notificaciones. Haz clic en "Activar Notificaciones" arriba.
+      </div>
+<button class="btn btn-warning btn-sm" onclick="requestNotifPermission()"><i class="fas fa-bell"></i> Permitir</button>
+</div>
+<div class="alert-banner alert-info" id="perm-ok-banner" style="margin-bottom:20px;">
+<i class="fas fa-circle-check alert-banner-icon"></i>
+<div class="alert-banner-body"><div class="alert-banner-title">✅ Notificaciones del navegador activadas</div><div class="alert-banner-desc">Recibirás alertas automáticas incluso cuando el portal esté en segundo plano.</div></div>
+</div>
+<!-- Reminder type cards -->
+<div style="margin-bottom:24px;">
+<div class="card-title" style="margin-bottom:14px;font-family:'Lora',serif;font-size:1.05rem;font-weight:700;"><i class="fas fa-calendar-check" style="color:var(--primary);"></i> Recordatorios de Citas</div>
+<div class="reminder-grid">
+<div class="reminder-card" id="rc-1day">
+<div class="reminder-card-title"><i class="fas fa-calendar-day" style="color:var(--info);"></i> 1 día antes</div>
+<div class="reminder-card-desc">Alerta el día anterior a cada cita programada</div>
+<div class="toggle-wrap">
+<label class="toggle"><input id="tog-1day" onchange="saveReminderSettings()" type="checkbox"/><span class="toggle-slider"></span></label>
+<span class="toggle-label">Activado</span>
+</div>
+</div>
+<div class="reminder-card" id="rc-2hr">
+<div class="reminder-card-title"><i class="fas fa-clock" style="color:var(--warning);"></i> 2 horas antes</div>
+<div class="reminder-card-desc">Recordatorio 2 horas antes de la cita</div>
+<div class="toggle-wrap">
+<label class="toggle"><input id="tog-2hr" onchange="saveReminderSettings()" type="checkbox"/><span class="toggle-slider"></span></label>
+<span class="toggle-label">Activado</span>
+</div>
+</div>
+<div class="reminder-card" id="rc-30min">
+<div class="reminder-card-title"><i class="fas fa-hourglass-half" style="color:var(--danger);"></i> 30 minutos antes</div>
+<div class="reminder-card-desc">Alerta urgente 30 minutos antes de la cita</div>
+<div class="toggle-wrap">
+<label class="toggle"><input id="tog-30min" onchange="saveReminderSettings()" type="checkbox"/><span class="toggle-slider"></span></label>
+<span class="toggle-label">Activado</span>
+</div>
+</div>
+<div class="reminder-card" id="rc-morning">
+<div class="reminder-card-title"><i class="fas fa-sun" style="color:var(--accent2);"></i> Resumen matutino</div>
+<div class="reminder-card-desc">Cada mañana: citas del día y medicamentos pendientes</div>
+<div class="toggle-wrap">
+<label class="toggle"><input id="tog-morning" onchange="saveReminderSettings()" type="checkbox"/><span class="toggle-slider"></span></label>
+<span class="toggle-label">Activado</span>
+</div>
+<div class="form-group" style="margin-top:10px;margin-bottom:0;">
+<label class="form-label" style="font-size:.75rem;">Hora del resumen</label>
+<input class="form-control" id="morning-time" onchange="saveReminderSettings()" style="padding:5px 10px;font-size:.82rem;" type="time" value="08:00"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Medication schedule -->
+<div class="card" style="margin-bottom:24px;">
+<div class="card-title"><i class="fas fa-pills"></i> Horario de Medicamentos</div>
+<p style="font-size:.85rem;color:var(--ink2);margin-bottom:16px;">Agrega los horarios en que mamá debe tomar sus medicamentos. Recibirás una alerta en cada horario.</p>
+<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+<input class="form-control" id="new-med-time" style="max-width:140px;" type="time"/>
+<input class="form-control" id="new-med-label" placeholder="Ej: Losartán 50mg" style="max-width:220px;"/>
+<button class="btn btn-primary btn-sm" onclick="addMedSchedule()"><i class="fas fa-plus"></i> Agregar horario</button>
+</div>
+<div class="time-chips" id="med-schedule-chips"></div>
+<div id="med-schedule-empty" style="font-size:.82rem;color:var(--ink3);margin-top:8px;display:none;">No hay horarios configurados.</div>
+</div>
+<!-- Notification history -->
+<div class="card">
+<div class="card-title"><i class="fas fa-history"></i> Historial de Alertas</div>
+<div id="notif-history-list"></div>
+<div class="empty-state" id="notif-history-empty" style="display:none;padding:30px 20px;"><i class="fas fa-bell-slash"></i><p>No hay alertas registradas aún.</p></div>
+</div>
+</div>
+<!-- ══ CONFIGURACIÓN ══ -->
+<div class="page" id="page-settings">
+<div class="page-header"><div><div class="page-title"><span>Configuración</span></div><div class="page-subtitle">Personaliza tu cuenta y el portal</div></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+<div class="card">
+<div class="card-title"><i class="fas fa-user-circle"></i> Mi Perfil</div>
+<div class="form-group"><label class="form-label">Mi nombre</label><input class="form-control" id="cfg-myname" placeholder="Ej: María García"/></div>
+<div class="form-group"><label class="form-label">Nombre de la paciente</label><input class="form-control" id="cfg-patname" placeholder="Ej: Rosa García"/></div>
+<div class="form-group"><label class="form-label">Fecha de nacimiento de la paciente</label><input class="form-control" id="cfg-dob" type="date"/></div>
+<div class="form-group"><label class="form-label">Tipo de sangre</label>
+<select class="form-control" id="cfg-blood"><option value="">Seleccionar...</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select>
+</div>
+<div class="form-group"><label class="form-label">Alergias conocidas</label><textarea class="form-control" id="cfg-allergies" placeholder="Ej: Penicilina, Aspirina..." rows="2"></textarea></div>
+<button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Guardar</button>
+</div>
+<div class="card">
+<div class="card-title"><i class="fas fa-users"></i> Miembros con Acceso</div>
+<p style="font-size:.85rem;color:var(--ink2);margin-bottom:16px;">Comparte este portal con tu familia enviando el enlace o exportando los datos.</p>
+<div id="members-list" style="margin-bottom:16px;"></div>
+<div class="form-row">
+<input class="form-control" id="new-member" placeholder="Nombre del familiar"/>
+<button class="btn btn-outline" onclick="addMember()"><i class="fas fa-user-plus"></i> Agregar</button>
+</div>
+<hr style="margin:20px 0;border-color:var(--border);"/>
+<div class="card-title" style="margin-bottom:10px;"><i class="fas fa-download"></i> Exportar Datos</div>
+<p style="font-size:.82rem;color:var(--ink2);margin-bottom:12px;">Descarga todos los datos del portal en formato JSON para respaldo.</p>
+<button class="btn btn-outline" onclick="exportData()"><i class="fas fa-file-export"></i> Exportar JSON</button>
+</div>
+</div>
+</div>
+</main>
+<!-- ══ MODALS ══ -->
+<!-- Modal: Registro -->
+<div class="modal-overlay" id="modal-record">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-file-medical" style="color:var(--primary);margin-right:8px;"></i>Nuevo Registro de Salud</div><button class="modal-close" onclick="closeModal('modal-record')"><i class="fas fa-xmark"></i></button></div>
+<div class="form-group"><label class="form-label">Fecha del registro *</label><input class="form-control" id="rec-date" type="date"/></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Tipo *</label><select class="form-control" id="rec-type"><option value="">Seleccionar...</option><option>Diagnóstico</option><option>Laboratorio</option><option>Imagen</option><option>Cirugía</option><option>Otro</option></select></div>
+<div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="rec-doctor" placeholder="Nombre del médico"/></div>
+</div>
+<div class="form-group"><label class="form-label">Descripción *</label><input class="form-control" id="rec-desc" placeholder="Ej: Diagnóstico de hipertensión arterial"/></div>
+<div class="form-group"><label class="form-label">Notas adicionales</label><textarea class="form-control" id="rec-notes" placeholder="Observaciones, resultados, indicaciones..." rows="3"></textarea></div>
+<div class="form-group">
+<label class="form-label"><i class="fas fa-file-pdf" style="color:var(--danger);margin-right:5px;"></i>Adjuntar PDF (opcional)</label>
+<div class="pdf-upload-area" id="rec-pdf-drop" onclick="document.getElementById('rec-pdf-input').click()" ondragleave="pdfDragLeave('rec-pdf-drop')" ondragover="pdfDragOver(event,'rec-pdf-drop')" ondrop="pdfDrop(event,'rec-pdf-input','rec-pdf-drop')">
+<i class="fas fa-cloud-arrow-up"></i>
+<p>Haz clic o arrastra un PDF aquí</p>
+<p style="font-size:.72rem;margin-top:2px;">Cualquier tamaño · Solo PDF · Se guarda en OneDrive</p>
+</div>
+<input accept=".pdf,application/pdf" id="rec-pdf-input" onchange="pdfFileSelected(this,'rec-pdf-drop')" style="display:none;" type="file"/>
+<div class="pdf-progress" id="rec-pdf-progress"><div class="pdf-progress-bar" id="rec-pdf-bar"></div></div>
+<div id="rec-pdf-preview"></div>
+</div>
+<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-record')">Cancelar</button><button class="btn btn-primary" id="rec-save-btn" onclick="saveRecord()"><i class="fas fa-save"></i> Guardar</button></div>
+</div>
+</div>
+<!-- Modal: Cita -->
+<div class="modal-overlay" id="modal-appt">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-calendar-plus" style="color:var(--primary);margin-right:8px;"></i>Nueva Cita Médica</div><button class="modal-close" onclick="closeModal('modal-appt')"><i class="fas fa-xmark"></i></button></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Fecha *</label><input class="form-control" id="appt-date" type="date"/></div>
+<div class="form-group"><label class="form-label">Hora *</label><input class="form-control" id="appt-time" type="time"/></div>
+</div>
+<!-- Doctor selector from contacts -->
+<div class="form-group">
+<label class="form-label">Seleccionar médico de contactos</label>
+<select class="form-control" id="appt-doc-select" onchange="fillDoctorFromContact(this.value)">
+<option value="">— Elegir de mis médicos registrados —</option>
+</select>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Médico / Especialista *</label><input class="form-control" id="appt-doctor" oninput="checkNewDoctor()" placeholder="Dr. Nombre Apellido"/></div>
+<div class="form-group"><label class="form-label">Especialidad</label><input class="form-control" id="appt-spec" placeholder="Ej: Cardiología"/></div>
+</div>
+<div class="form-group"><label class="form-label">Motivo de la consulta *</label><input class="form-control" id="appt-reason" placeholder="Ej: Revisión de presión arterial"/></div>
+<div class="form-group"><label class="form-label">Lugar / Clínica</label><input class="form-control" id="appt-place" placeholder="Ej: Hospital General, Consultorio 3B"/></div>
+<div class="form-group"><label class="form-label">Estado</label><select class="form-control" id="appt-status"><option value="próxima">Próxima</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
+<div class="form-group"><label class="form-label">Notas</label><textarea class="form-control" id="appt-notes" placeholder="Indicaciones previas, documentos a llevar..." rows="2"></textarea></div>
+<!-- Auto-save doctor hint -->
+<div id="appt-new-doc-hint" style="display:none;background:var(--accent);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:.82rem;color:var(--ink2);margin-bottom:12px;">
+<i class="fas fa-circle-info" style="color:var(--primary);margin-right:6px;"></i>
+<strong>Médico nuevo detectado.</strong> Se agregará automáticamente a tus Contactos al guardar.
+  <div class="form-row" style="margin-top:10px;">
+<div class="form-group" style="margin-bottom:0;"><label class="form-label">Teléfono (opcional)</label><input class="form-control" id="appt-new-doc-phone" placeholder="+52 55 1234 5678"/></div>
+<div class="form-group" style="margin-bottom:0;"><label class="form-label">Dirección (opcional)</label><input class="form-control" id="appt-new-doc-address" placeholder="Dirección del consultorio"/></div>
+</div>
+</div>
+<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-appt')">Cancelar</button><button class="btn btn-primary" onclick="saveAppt()"><i class="fas fa-save"></i> Guardar</button></div>
+</div>
+</div>
+<!-- Modal: Medicamento -->
+<div class="modal-overlay" id="modal-med">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-pills" style="color:var(--primary);margin-right:8px;"></i>Agregar Medicamento</div><button class="modal-close" onclick="closeModal('modal-med')"><i class="fas fa-xmark"></i></button></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Nombre del medicamento *</label><input class="form-control" id="med-name" placeholder="Ej: Losartán"/></div>
+<div class="form-group"><label class="form-label">Dosis *</label><input class="form-control" id="med-dose" placeholder="Ej: 50mg"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Frecuencia *</label><select class="form-control" id="med-freq"><option>Una vez al día</option><option>Dos veces al día</option><option>Tres veces al día</option><option>Cada 8 horas</option><option>Cada 12 horas</option><option>Según necesidad</option><option>Otro</option></select></div>
+<div class="form-group"><label class="form-label">Vía de administración</label><select class="form-control" id="med-route"><option>Oral</option><option>Sublingual</option><option>Inyectable</option><option>Tópica</option><option>Inhalada</option><option>Otra</option></select></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Fecha de inicio</label><input class="form-control" id="med-start" type="date"/></div>
+<div class="form-group"><label class="form-label">Estado</label><select class="form-control" id="med-status"><option value="activo">Activo</option><option value="suspendido">Suspendido</option></select></div>
+</div>
+<div class="form-group"><label class="form-label">Médico que lo recetó</label><input class="form-control" id="med-doctor" placeholder="Nombre del médico"/></div>
+<div class="form-group"><label class="form-label">Indicaciones especiales</label><textarea class="form-control" id="med-notes" placeholder="Ej: Tomar con alimentos, evitar sol..." rows="2"></textarea></div>
+<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-med')">Cancelar</button><button class="btn btn-primary" onclick="saveMed()"><i class="fas fa-save"></i> Guardar</button></div>
+</div>
+</div>
+<!-- Modal: Agregar/Editar Médico -->
+<div class="modal-overlay" id="modal-doc">
+<div class="modal">
+<div class="modal-header">
+<div class="modal-title" id="modal-doc-title"><i class="fas fa-user-doctor" style="color:var(--primary);margin-right:8px;"></i>Agregar Médico</div>
+<button class="modal-close" onclick="closeModal('modal-doc')"><i class="fas fa-xmark"></i></button>
+</div>
+<input id="doc-edit-id" type="hidden"/>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Nombre completo *</label><input class="form-control" id="doc-name" placeholder="Dr. Nombre Apellido"/></div>
+<div class="form-group"><label class="form-label">Especialidad *</label><input class="form-control" id="doc-spec" placeholder="Ej: Cardiología"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Teléfono</label><input class="form-control" id="doc-phone" placeholder="Ej: +52 55 1234 5678"/></div>
+<div class="form-group"><label class="form-label">Correo electrónico</label><input class="form-control" id="doc-email" placeholder="doctor@clinica.com"/></div>
+</div>
+<div class="form-group"><label class="form-label">Clínica / Hospital</label><input class="form-control" id="doc-clinic" placeholder="Nombre del consultorio o hospital"/></div>
+<div class="form-group"><label class="form-label">Dirección</label><input class="form-control" id="doc-address" placeholder="Dirección del consultorio"/></div>
+<div class="form-group"><label class="form-label">Notas</label><textarea class="form-control" id="doc-notes" placeholder="Horarios, referencias, observaciones..." rows="2"></textarea></div>
+<div class="form-actions">
+<button class="btn btn-outline" onclick="closeModal('modal-doc')">Cancelar</button>
+<button class="btn btn-primary" id="doc-save-btn" onclick="saveDoc()"><i class="fas fa-save"></i> Guardar</button>
+</div>
+</div>
+</div>
+<!-- Modal: Nota -->
+<div class="modal-overlay" id="modal-note">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-pen-to-square" style="color:var(--primary);margin-right:8px;"></i>Nueva Nota</div><button class="modal-close" onclick="closeModal('modal-note')"><i class="fas fa-xmark"></i></button></div>
+<div class="form-group"><label class="form-label">Título *</label><input class="form-control" id="note-title" placeholder="Ej: Observación post-consulta"/></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Autor</label><input class="form-control" id="note-author" placeholder="Tu nombre"/></div>
+<div class="form-group"><label class="form-label">Categoría</label><select class="form-control" id="note-cat"><option>General</option><option>Síntomas</option><option>Dieta</option><option>Ejercicio</option><option>Estado de ánimo</option><option>Emergencia</option></select></div>
+</div>
+<div class="form-group"><label class="form-label">Contenido *</label><textarea class="form-control" id="note-body" placeholder="Escribe tu observación aquí..." rows="5"></textarea></div>
+<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-note')">Cancelar</button><button class="btn btn-primary" onclick="saveNote()"><i class="fas fa-save"></i> Guardar</button></div>
+</div>
+</div>
+<!-- Modal: Completar Cita (confirmación con comentarios) -->
+<div class="modal-overlay" id="modal-complete-appt">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-circle-check" style="color:var(--primary);margin-right:8px;"></i>Completar Cita</div><button class="modal-close" onclick="closeModal('modal-complete-appt')"><i class="fas fa-xmark"></i></button></div>
+<div id="complete-appt-info" style="background:var(--accent);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:18px;font-size:.88rem;color:var(--ink2);"></div>
+<div class="form-group"><label class="form-label">¿Confirmas que esta cita fue completada?</label></div>
+<div class="form-group"><label class="form-label">Comentarios / Resultado de la consulta</label><textarea class="form-control" id="complete-appt-comments" placeholder="Ej: El médico indicó continuar con el tratamiento, próxima cita en 3 meses..." rows="4"></textarea></div>
+<div class="form-group"><label class="form-label">¿Deseas crear un registro de salud con esta consulta?</label>
+<select class="form-control" id="complete-appt-record">
+<option value="yes">Sí, crear registro automáticamente</option>
+<option value="no">No, solo marcar como completada</option>
+</select>
+</div>
+<div class="form-actions">
+<button class="btn btn-outline" onclick="closeModal('modal-complete-appt')">Cancelar</button>
+<button class="btn btn-primary" onclick="confirmCompleteAppt()"><i class="fas fa-circle-check"></i> Confirmar y Completar</button>
+</div>
+</div>
+</div>
+<!-- Modal: Editar Cita (estado + comentarios) -->
+<div class="modal-overlay" id="modal-edit-appt">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-pen-to-square" style="color:var(--primary);margin-right:8px;"></i>Editar Cita</div><button class="modal-close" onclick="closeModal('modal-edit-appt')"><i class="fas fa-xmark"></i></button></div>
+<input id="edit-appt-id" type="hidden"/>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Fecha</label><input class="form-control" id="edit-appt-date" type="date"/></div>
+<div class="form-group"><label class="form-label">Hora</label><input class="form-control" id="edit-appt-time" type="time"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="edit-appt-doctor"/></div>
+<div class="form-group"><label class="form-label">Especialidad</label><input class="form-control" id="edit-appt-spec"/></div>
+</div>
+<div class="form-group"><label class="form-label">Motivo</label><input class="form-control" id="edit-appt-reason"/></div>
+<div class="form-group"><label class="form-label">Lugar / Clínica</label><input class="form-control" id="edit-appt-place"/></div>
+<div class="form-group"><label class="form-label">Estado *</label>
+<select class="form-control" id="edit-appt-status">
+<option value="próxima">Próxima</option>
+<option value="completada">Completada</option>
+<option value="cancelada">Cancelada</option>
+<option value="reprogramada">Reprogramada</option>
+</select>
+</div>
+<div class="form-group"><label class="form-label">Notas / Indicaciones</label><textarea class="form-control" id="edit-appt-notes" rows="2"></textarea></div>
+<div class="form-group"><label class="form-label">Comentarios / Resultado</label><textarea class="form-control" id="edit-appt-comments" placeholder="Resultado de la consulta, observaciones del médico..." rows="3"></textarea></div>
+<div class="form-actions">
+<button class="btn btn-outline" onclick="closeModal('modal-edit-appt')">Cancelar</button>
+<button class="btn btn-primary" onclick="saveEditAppt()"><i class="fas fa-save"></i> Guardar Cambios</button>
+</div>
+</div>
+</div>
+<!-- Modal: Editar Registro de Salud -->
+<div class="modal-overlay" id="modal-edit-record">
+<div class="modal">
+<div class="modal-header">
+  <div class="modal-title"><i class="fas fa-pen" style="color:var(--primary);margin-right:8px;"></i>Editar Registro de Salud</div>
+  <button class="modal-close" onclick="closeModal('modal-edit-record')"><i class="fas fa-xmark"></i></button>
+</div>
+<input type="hidden" id="edit-rec-id"/>
+<div class="form-group"><label class="form-label">Fecha del registro *</label><input class="form-control" type="date" id="edit-rec-date"/></div>
+<div class="form-row">
+  <div class="form-group"><label class="form-label">Tipo *</label>
+    <select class="form-control" id="edit-rec-type">
+      <option value="">Seleccionar...</option>
+      <option>Diagnóstico</option><option>Laboratorio</option><option>Imagen</option>
+      <option>Cirugía</option><option>Otro</option>
+    </select>
+  </div>
+  <div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="edit-rec-doctor" placeholder="Nombre del médico"/></div>
+</div>
+<div class="form-group"><label class="form-label">Descripción *</label><input class="form-control" id="edit-rec-desc" placeholder="Ej: Diagnóstico de hipertensión arterial"/></div>
+<div class="form-group"><label class="form-label">Notas adicionales</label><textarea class="form-control" id="edit-rec-notes" rows="3" placeholder="Observaciones, resultados, indicaciones..."></textarea></div>
+<div id="edit-rec-pdf-info" style="display:none;background:var(--accent);border-radius:var(--radius-sm);padding:10px 14px;font-size:.82rem;color:var(--ink2);margin-bottom:12px;">
+  <i class="fas fa-file-pdf" style="color:#e05252;margin-right:6px;"></i><span id="edit-rec-pdf-name"></span>
+  <span style="color:var(--ink3);margin-left:8px;">(El PDF existente se mantiene)</span>
+</div>
+<div class="form-actions">
+  <button class="btn btn-outline" onclick="closeModal('modal-edit-record')">Cancelar</button>
+  <button class="btn btn-primary" onclick="saveEditRecord()"><i class="fas fa-save"></i> Guardar Cambios</button>
+</div>
+</div>
+</div>
+
+<!-- Modal: Confirmar Eliminación de Registro -->
+<div class="modal-overlay" id="modal-delete-record">
+<div class="modal" style="max-width:420px;">
+<div class="modal-header">
+  <div class="modal-title" style="color:var(--danger);"><i class="fas fa-triangle-exclamation" style="margin-right:8px;"></i>Confirmar Eliminación</div>
+  <button class="modal-close" onclick="closeModal('modal-delete-record')"><i class="fas fa-xmark"></i></button>
+</div>
+<div id="delete-rec-info" style="background:#fdeaea;border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;">
+  <div style="font-weight:700;font-size:.9rem;color:var(--ink);" id="delete-rec-desc-preview"></div>
+  <div style="font-size:.8rem;color:var(--ink2);margin-top:4px;" id="delete-rec-meta-preview"></div>
+</div>
+<p style="font-size:.88rem;color:var(--ink2);margin-bottom:8px;">Esta acción <strong>no se puede deshacer</strong>. ¿Estás seguro de que deseas eliminar este registro?</p>
+<p style="font-size:.82rem;color:var(--danger);margin-bottom:18px;" id="delete-rec-pdf-warning"></p>
+<div class="form-group">
+  <label class="form-label">Escribe <strong>ELIMINAR</strong> para confirmar</label>
+  <input class="form-control" id="delete-rec-confirm-input" placeholder="Escribe ELIMINAR" oninput="checkDeleteConfirm()"/>
+</div>
+<div class="form-actions">
+  <button class="btn btn-outline" onclick="closeModal('modal-delete-record')">Cancelar</button>
+  <button class="btn btn-danger" id="delete-rec-confirm-btn" disabled onclick="confirmDeleteRecord()"><i class="fas fa-trash"></i> Eliminar Definitivamente</button>
+</div>
+</div>
+</div>
+
+<!-- Modal: Compartir -->
+<div class="modal-overlay" id="modal-share">
+<div class="modal">
+<div class="modal-header"><div class="modal-title"><i class="fas fa-share-nodes" style="color:var(--primary);margin-right:8px;"></i>Compartir Portal</div><button class="modal-close" onclick="closeModal('modal-share')"><i class="fas fa-xmark"></i></button></div>
+<p style="font-size:.88rem;color:var(--ink2);margin-bottom:18px;">Comparte este portal con tu familia para que puedan ver y colaborar en el cuidado de Elena.</p>
+<div class="form-group"><label class="form-label">Enlace del portal</label><div style="display:flex;gap:8px;"><input class="form-control" id="share-link" readonly="" value=""/><button class="btn btn-outline btn-sm" onclick="copyLink()"><i class="fas fa-copy"></i> Copiar</button></div></div>
+<hr style="margin:16px 0;border-color:var(--border);"/>
+<p style="font-size:.82rem;color:var(--ink3);">💡 <strong>Consejo:</strong> Para colaboración en tiempo real, sube este archivo HTML a Google Drive, Dropbox o cualquier servicio de alojamiento web y comparte el enlace con tu familia.</p>
+<div class="form-actions"><button class="btn btn-primary" onclick="closeModal('modal-share')">Entendido</button></div>
+</div>
+</div>
+<!-- Toast -->
+<div id="toast" style="position:fixed;bottom:28px;right:28px;background:var(--primary-dark);color:#fff;padding:12px 22px;border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);font-size:.88rem;font-weight:600;z-index:999;display:none;align-items:center;gap:10px;">
+<i class="fas fa-circle-check"></i><span id="toast-msg"></span>
+</div>
+<script>
+// ══════════════════════════════════════════
+//  SALUD ELENA - OneDrive/Microsoft Graph
+//  No Firebase. All data in OneDrive JSON files.
+// ══════════════════════════════════════════
+
+// ── Microsoft OAuth2 PKCE Config ──
+const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c';
+const MS_REDIRECT_URI = window.location.origin + window.location.pathname;
+const MS_SCOPES = 'Files.ReadWrite User.Read offline_access';
+const OD_FOLDER = 'SaludElena';
+const OD_DATA = OD_FOLDER + '/data';
+const OD_PDFS = OD_FOLDER + '/PDFs';
+
+// ── PKCE helpers ──
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+async function genPKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  return {verifier, challenge};
+}
+
+// ── Token management ──
+function getMsToken() { return localStorage.getItem('ms_access_token'); }
+function setMsToken(t, exp) {
+  localStorage.setItem('ms_access_token', t);
+  localStorage.setItem('ms_token_exp', Date.now() + exp * 1000);
+}
+function msTokenValid() {
+  const exp = localStorage.getItem('ms_token_exp');
+  return exp && Date.now() < parseInt(exp) - 60000;
+}
+
+async function refreshMsToken() {
+  const rt = localStorage.getItem('ms_refresh_token');
+  if (!rt) return false;
+  try {
+    const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({client_id: MS_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: MS_SCOPES})
+    });
+    const d = await r.json();
+    if (d.access_token) {
+      setMsToken(d.access_token, d.expires_in);
+      if (d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+async function ensureMsToken() {
+  if (msTokenValid()) return getMsToken();
+  if (await refreshMsToken()) return getMsToken();
+  return await loginMicrosoftPopup();
+}
+
+async function loginMicrosoftPopup() {
+  return new Promise(async (resolve, reject) => {
+    const {verifier, challenge} = await genPKCE();
+    const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
+    localStorage.setItem('ms_pkce_verifier', verifier);
+    localStorage.setItem('ms_oauth_state', state);
+    const params = new URLSearchParams({
+      client_id: MS_CLIENT_ID, response_type: 'code', redirect_uri: MS_REDIRECT_URI,
+      scope: MS_SCOPES, state, code_challenge: challenge, code_challenge_method: 'S256',
+      response_mode: 'query', prompt: 'select_account'
+    });
+    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
+    const popup = window.open(authUrl, 'ms_login', 'width=500,height=650,left=200,top=100');
+    if (!popup) { reject(new Error('Popup bloqueado. Permite popups para este sitio.')); return; }
+    const timer = setInterval(async () => {
+      try {
+        if (popup.closed) { clearInterval(timer); reject(new Error('Login cancelado')); return; }
+        const url = popup.location.href;
+        if (url.startsWith(MS_REDIRECT_URI) && url.includes('code=')) {
+          clearInterval(timer); popup.close();
+          const urlParams = new URLSearchParams(new URL(url).search);
+          const code = urlParams.get('code');
+          const retState = urlParams.get('state');
+          if (retState !== localStorage.getItem('ms_oauth_state')) { reject(new Error('State mismatch')); return; }
+          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({
+              client_id: MS_CLIENT_ID, grant_type: 'authorization_code', code,
+              redirect_uri: MS_REDIRECT_URI, code_verifier: localStorage.getItem('ms_pkce_verifier')
+            })
+          });
+          const d = await r.json();
+          if (d.access_token) {
+            setMsToken(d.access_token, d.expires_in);
+            if (d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
+            // Get user info
+            const ui = await fetch('https://graph.microsoft.com/v1.0/me', {headers: {'Authorization': 'Bearer ' + d.access_token}});
+            const user = await ui.json();
+            localStorage.setItem('ms_user_name', user.displayName || user.userPrincipalName || 'Usuario');
+            resolve(d.access_token);
+          } else {
+            reject(new Error(d.error_description || 'Token error'));
+          }
+        }
+      } catch(e) { /* cross-origin, keep waiting */ }
+    }, 500);
+    setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); reject(new Error('Login timeout')); }, 120000);
+  });
+}
+
+// ── Graph API helpers ──
+async function graphGet(path) {
+  const token = await ensureMsToken();
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {headers: {'Authorization': 'Bearer ' + token}});
+  if (!r.ok) throw new Error('Graph GET error: ' + r.status);
+  return r.json();
+}
+
+async function graphPut(path, body, contentType) {
+  const token = await ensureMsToken();
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    method: 'PUT',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': contentType || 'application/json'},
+    body: typeof body === 'string' ? body : JSON.stringify(body)
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Graph PUT error: ' + (e.error?.message || r.status)); }
+  return r.json();
+}
+
+async function graphPost(path, body) {
+  const token = await ensureMsToken();
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Graph POST error: ' + (e.error?.message || r.status)); }
+  return r.json();
+}
+
+async function graphDelete(path) {
+  const token = await ensureMsToken();
+  await fetch('https://graph.microsoft.com/v1.0' + path, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
+}
+
+// ── OneDrive data file operations ──
+async function odReadJson(filename) {
+  try {
+    const r = await graphGet('/me/drive/root:/' + OD_DATA + '/' + filename + ':/content');
+    return r;
+  } catch(e) {
+    return null; // File doesn't exist yet
+  }
+}
+
+async function odWriteJson(filename, data) {
+  setSyncStatus('syncing');
+  try {
+    await graphPut('/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', JSON.stringify(data), 'application/json');
+    setSyncStatus('synced');
+  } catch(e) {
+    setSyncStatus('offline');
+    throw e;
+  }
+}
+
+async function odUploadFile(file, filename) {
+  const token = await ensureMsToken();
+  const path = '/me/drive/root:/' + OD_PDFS + '/' + filename + ':/content';
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    method: 'PUT',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': file.type || 'application/pdf'},
+    body: file
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Upload error: ' + (e.error?.message || r.status)); }
+  const data = await r.json();
+  // Create sharing link
+  try {
+    const share = await graphPost('/me/drive/items/' + data.id + '/createLink', {type: 'view', scope: 'anonymous'});
+    return {url: share.link?.webUrl || data.webUrl, name: file.name, driveItemId: data.id};
+  } catch(e) {
+    return {url: data.webUrl, name: file.name, driveItemId: data.id};
+  }
+}
+
+async function odDeleteFile(driveItemId) {
+  try { await graphDelete('/me/drive/items/' + driveItemId); } catch(e) { console.warn('Delete error:', e); }
+}
+
+// ── Sync status ──
+function setSyncStatus(status) {
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-text');
+  if (!dot) return;
+  dot.className = 'sync-dot ' + status;
+  txt.textContent = status === 'synced' ? 'Sincronizado' : status === 'syncing' ? 'Guardando...' : 'Sin conexion';
+}
+
+// ══════════════════════════════════════════
+//  DATA STORE (localStorage cache + OneDrive)
+// ══════════════════════════════════════════
+const KEYS = {records:'se_records', appts:'se_appts', meds:'se_meds', docs:'se_docs', notes:'se_notes', settings:'se_settings', activity:'se_activity', medSchedule:'se_medSchedule', notifs:'se_notifs'};
+
+function loadLocal(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
+function loadLocalObj(k) { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } }
+function saveLocal(k, d) { localStorage.setItem(k, JSON.stringify(d)); }
+
+let records = loadLocal(KEYS.records);
+let appts = loadLocal(KEYS.appts);
+let meds = loadLocal(KEYS.meds);
+let docs = loadLocal(KEYS.docs);
+let notes = loadLocal(KEYS.notes);
+let settings = loadLocalObj(KEYS.settings);
+let activity = loadLocal(KEYS.activity);
+let medSchedule = loadLocal(KEYS.medSchedule);
+let notifications = loadLocal(KEYS.notifs);
+let reminderSettings = loadLocalObj('se_reminders');
+
+// Save to both localStorage and OneDrive
+async function save(key, data) {
+  saveLocal(key, data);
+  const filename = key.replace('se_', '') + '.json';
+  odWriteJson(filename, data).catch(e => console.warn('OneDrive sync error:', e));
+}
+
+async function saveObj(key, data) {
+  saveLocal(key, data);
+  const filename = key.replace('se_', '') + '.json';
+  odWriteJson(filename, data).catch(e => console.warn('OneDrive sync error:', e));
+}
+
+// Load all data from OneDrive
+async function loadAllFromOneDrive() {
+  setSyncStatus('syncing');
+  const files = [
+    {key: KEYS.records, file: 'records.json', target: 'records'},
+    {key: KEYS.appts, file: 'appts.json', target: 'appts'},
+    {key: KEYS.meds, file: 'meds.json', target: 'meds'},
+    {key: KEYS.docs, file: 'docs.json', target: 'docs'},
+    {key: KEYS.notes, file: 'notes.json', target: 'notes'},
+    {key: KEYS.activity, file: 'activity.json', target: 'activity'},
+    {key: KEYS.medSchedule, file: 'medSchedule.json', target: 'medSchedule'},
+    {key: KEYS.notifs, file: 'notifs.json', target: 'notifications'},
+  ];
+  for (const f of files) {
+    try {
+      const data = await odReadJson(f.file);
+      if (data && Array.isArray(data)) {
+        saveLocal(f.key, data);
+        if (f.target === 'records') records = data;
+        else if (f.target === 'appts') appts = data;
+        else if (f.target === 'meds') meds = data;
+        else if (f.target === 'docs') docs = data;
+        else if (f.target === 'notes') notes = data;
+        else if (f.target === 'activity') activity = data;
+        else if (f.target === 'medSchedule') medSchedule = data;
+        else if (f.target === 'notifications') notifications = data;
+      }
+    } catch(e) { console.warn('Load error for ' + f.file, e); }
+  }
+  // Load settings
+  try {
+    const s = await odReadJson('settings.json');
+    if (s && typeof s === 'object') { settings = s; saveLocal(KEYS.settings, s); }
+  } catch(e) {}
+  setSyncStatus('synced');
+}
+
+// ══════════════════════════════════════════
+//  SESSION MANAGEMENT
+// ══════════════════════════════════════════
+let msUserName = localStorage.getItem('ms_user_name') || null;
+let isLoggedIn = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
+
+function logoutFamily() {
+  if (!confirm('Cerrar sesion? Tendras que iniciar sesion con Microsoft nuevamente.')) return;
+  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_pkce_verifier','ms_oauth_state'].forEach(k => localStorage.removeItem(k));
+  // Clear data cache
+  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+  location.reload();
+}
+
+function showFamilyCode() {
+  alert('Para compartir el portal con tu familia:\n\n1. Comparte tu cuenta de Microsoft con ellos\n   O\n2. Sube el archivo index.html a tu OneDrive y comparte el enlace\n\nTodos los datos se guardan en tu OneDrive/SaludElena/');
+}
+
+function updateTopbarFamilyCode() {
+  const el = document.getElementById('topbar-family-code');
+  if (el && msUserName) el.textContent = msUserName.split(' ')[0];
+}
+
+async function enterPortal() {
+  // Clear stale cache
+  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+  records = []; appts = []; meds = []; docs = []; notes = []; activity = []; medSchedule = []; notifications = [];
+  // Load fresh data from OneDrive
+  await loadAllFromOneDrive();
+  msUserName = localStorage.getItem('ms_user_name') || 'Usuario';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('user-name').textContent = msUserName;
+  document.getElementById('user-avatar').textContent = msUserName.slice(0,2).toUpperCase();
+  updateTopbarFamilyCode();
+  renderDashboard();
+  updateBellBadge();
+  renderNotifPanel();
+  setSyncStatus('synced');
+}
+
+async function loginWithMicrosoft() {
+  const btn = document.getElementById('ms-login-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
+  try {
+    await ensureMsToken();
+    await enterPortal();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-microsoft"></i> Iniciar sesion con Microsoft'; }
+    showLoginError('Error al conectar: ' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (el) el.classList.add('active');
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'records') renderRecords();
+  if (id === 'appointments') renderAppts();
+  if (id === 'medications') renderMeds();
+  if (id === 'doctors') renderDocs();
+  if (id === 'notes') renderNotes();
+  if (id === 'reminders') renderRemindersPage();
+  if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+}
+
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+
+// ══════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); }
+  if (id === 'modal-appt') { document.getElementById('appt-date').value = today(); populateDoctorSelector(); document.getElementById('appt-new-doc-hint').style.display = 'none'; }
+  if (id === 'modal-med') document.getElementById('med-start').value = today();
+  if (id === 'modal-share') document.getElementById('share-link').value = window.location.href;
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(d) { if (!d) return '—'; const [y,m,day] = d.split('-'); return day+'/'+m+'/'+y; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.style.background = type === 'warning' ? 'var(--warning)' : type === 'danger' ? 'var(--danger)' : 'var(--primary-dark)';
+  document.getElementById('toast-msg').textContent = msg;
+  t.style.display = 'flex';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function addActivity(icon, color, text) {
+  activity.unshift({icon, color, text, time: new Date().toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})});
+  if (activity.length > 20) activity = activity.slice(0, 20);
+  save(KEYS.activity, activity);
+}
+
+function copyLink() { navigator.clipboard.writeText(document.getElementById('share-link').value).then(() => toast('Enlace copiado!')); }
+
+function tagClass(type) {
+  const map = {diagnostico:'tag-blue', 'diagnóstico':'tag-blue', laboratorio:'tag-yellow', imagen:'tag-green', cirugia:'tag-red', 'cirugía':'tag-red', proxima:'tag-blue', 'próxima':'tag-blue', completada:'tag-green', cancelada:'tag-red', reprogramada:'tag-orange', activo:'tag-green', suspendido:'tag-gray'};
+  return map[(type||'').toLowerCase()] || 'tag-gray';
+}
+
+// ══════════════════════════════════════════
+//  NOTIFICATIONS
+// ══════════════════════════════════════════
+function addNotification(type, title, desc, urgency) {
+  urgency = urgency || 'info';
+  const n = {id: uid(), type, title, desc, urgency, time: new Date().toISOString(), read: false};
+  notifications.unshift(n);
+  if (notifications.length > 50) notifications = notifications.slice(0, 50);
+  save(KEYS.notifs, notifications);
+  updateBellBadge();
+  renderNotifPanel();
+}
+
+function updateBellBadge() {
+  const unread = notifications.filter(n => !n.read).length;
+  const badge = document.getElementById('bell-badge');
+  const rb = document.getElementById('badge-reminders');
+  if (unread > 0) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+  if (rb) rb.textContent = unread;
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  const overlay = document.getElementById('notif-overlay');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  overlay.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderNotifPanel();
+}
+
+function renderNotifPanel() {
+  const list = document.getElementById('notif-list');
+  if (!notifications.length) { list.innerHTML = '<div class="notif-empty"><i class="fas fa-bell-slash"></i><p>Sin notificaciones</p></div>'; return; }
+  list.innerHTML = notifications.slice(0,20).map(n =>
+    '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="markRead(\'' + n.id + '\')">' +
+    '<div class="notif-dot ' + (n.read ? 'read' : n.urgency) + '"></div>' +
+    '<div style="flex:1;"><div class="notif-text"><strong>' + n.title + '</strong><br/>' + n.desc + '</div>' +
+    '<div class="notif-time">' + new Date(n.time).toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) + '</div></div></div>'
+  ).join('');
+}
+
+function markRead(id) {
+  const n = notifications.find(x => x.id === id);
+  if (n) { n.read = true; save(KEYS.notifs, notifications); updateBellBadge(); renderNotifPanel(); }
+}
+
+function markAllRead() {
+  notifications.forEach(n => n.read = true);
+  save(KEYS.notifs, notifications); updateBellBadge(); renderNotifPanel();
+  toast('Todas las notificaciones marcadas como leidas');
+}
+
+function requestNotifPermission() {
+  if (!('Notification' in window)) { toast('Tu navegador no soporta notificaciones', 'warning'); return; }
+  Notification.requestPermission().then(perm => {
+    if (perm === 'granted') {
+      toast('Notificaciones del navegador activadas!');
+      reminderSettings.browserNotif = true;
+      saveObj('se_reminders', reminderSettings);
+      updatePermBanners();
+      new Notification('Salud Elena', {body: 'Las notificaciones estan activadas.'});
+    } else {
+      toast('Permiso denegado. Activalo en la configuracion del navegador.', 'warning');
+    }
+  });
+}
+
+function sendBrowserNotif(title, body, urgency) {
+  if (Notification.permission === 'granted') {
+    new Notification('Salud Elena - ' + title, {body, tag: 'saludelena-' + urgency});
+  }
+}
+
+function updatePermBanners() {
+  const granted = Notification.permission === 'granted';
+  const pb = document.getElementById('perm-banner');
+  const ob = document.getElementById('perm-ok-banner');
+  if (pb) pb.style.display = granted ? 'none' : 'flex';
+  if (ob) ob.style.display = granted ? 'flex' : 'none';
+}
+
+// ══════════════════════════════════════════
+//  REMINDER ENGINE
+// ══════════════════════════════════════════
+function checkAppointmentReminders() {
+  if (!appts.length) return;
+  const now = new Date();
+  appts.filter(a => a.status === 'proxima' || a.status === 'próxima').forEach(a => {
+    if (!a.date || !a.time) return;
+    const apptDT = new Date(a.date + 'T' + a.time);
+    const diffMs = apptDT - now;
+    const diffMin = diffMs / 60000;
+    const diffHr = diffMin / 60;
+    const diffDays = diffHr / 24;
+    const lastKey = 'se_reminded_' + a.id;
+    const reminded = JSON.parse(localStorage.getItem(lastKey) || '{}');
+    if (reminderSettings.oneDay && diffDays > 0 && diffDays <= 1.1 && !reminded.oneDay) {
+      addNotification('appt', 'Cita manana', 'Cita: ' + a.doctor + ' - ' + a.reason + ' a las ' + a.time, 'warning');
+      sendBrowserNotif('Cita manana', a.doctor + ' - ' + a.reason, 'warning');
+      reminded.oneDay = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
+    }
+    if (reminderSettings.twoHour && diffHr > 0 && diffHr <= 2.1 && !reminded.twoHour) {
+      addNotification('appt', 'Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent');
+      sendBrowserNotif('Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent');
+      reminded.twoHour = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
+    }
+    if (reminderSettings.thirtyMin && diffMin > 0 && diffMin <= 31 && !reminded.thirtyMin) {
+      addNotification('appt', 'Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent');
+      sendBrowserNotif('Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent');
+      reminded.thirtyMin = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
+    }
+  });
+}
+
+function checkMedSchedule() {
+  if (!medSchedule.length) return;
+  const now = new Date();
+  const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const todayKey = today();
+  medSchedule.forEach(s => {
+    const doneKey = 'se_med_done_' + s.id + '_' + todayKey;
+    if (localStorage.getItem(doneKey)) return;
+    if (hhmm === s.time) {
+      addNotification('med', 'Hora del medicamento', 'Es hora de tomar: ' + s.label + ' (' + s.time + ')', 'med');
+      sendBrowserNotif('Hora del medicamento', 'Es hora de tomar: ' + s.label, 'med');
+      localStorage.setItem(doneKey, '1');
+    }
+  });
+}
+
+function checkMorningSummary() {
+  if (!reminderSettings.morning) return;
+  const mTime = reminderSettings.morningTime || '08:00';
+  const now = new Date();
+  const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const doneKey = 'se_morning_' + today();
+  if (hhmm === mTime && !localStorage.getItem(doneKey)) {
+    const todayAppts = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date === today());
+    const activeMeds = meds.filter(m => m.status === 'activo');
+    let summary = 'Buenos dias. ';
+    if (todayAppts.length) summary += 'Hoy hay ' + todayAppts.length + ' cita(s). ';
+    else summary += 'No hay citas hoy. ';
+    if (activeMeds.length) summary += 'Medicamentos activos: ' + activeMeds.map(m => m.name).join(', ') + '.';
+    addNotification('summary', 'Resumen del dia', summary, 'info');
+    sendBrowserNotif('Resumen del dia', summary, 'info');
+    localStorage.setItem(doneKey, '1');
+  }
+}
+
+function computeDashAlerts() {
+  const alerts = [];
+  const now = new Date();
+  appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time).sort((a,b) => a.date.localeCompare(b.date)).forEach(a => {
+    const apptDT = new Date(a.date + 'T' + a.time);
+    const diffMs = apptDT - now;
+    const diffMin = diffMs / 60000;
+    const diffHr = diffMin / 60;
+    const diffDays = diffHr / 24;
+    if (diffMin > 0 && diffMin <= 30) alerts.push({type:'urgent', icon:'fas fa-triangle-exclamation', title:'Cita en ' + Math.round(diffMin) + ' minutos!', desc: a.doctor + ' - ' + a.reason, id:'a'+a.id});
+    else if (diffHr > 0 && diffHr <= 2) alerts.push({type:'warning', icon:'fas fa-clock', title:'Cita en ' + Math.round(diffHr*60) + ' minutos', desc: a.doctor + ' - ' + a.reason + ' a las ' + a.time, id:'a'+a.id});
+    else if (diffDays > 0 && diffDays <= 1) alerts.push({type:'info', icon:'fas fa-calendar-check', title:'Cita manana: ' + a.doctor, desc: a.reason + ' a las ' + a.time, id:'a'+a.id});
+  });
+  medSchedule.forEach(s => {
+    const [sh,sm] = s.time.split(':').map(Number);
+    const now2 = new Date();
+    const diff = (sh*60+sm) - (now2.getHours()*60+now2.getMinutes());
+    if (diff >= 0 && diff <= 15) alerts.push({type:'med', icon:'fas fa-pills', title:'Medicamento en ' + diff + ' min', desc: s.label + ' - ' + s.time, id:'m'+s.id});
+  });
+  return alerts;
+}
+
+function renderDashAlerts() {
+  const alerts = computeDashAlerts();
+  const container = document.getElementById('dash-alerts');
+  const dismissed = JSON.parse(localStorage.getItem('se_dismissed_alerts') || '{}');
+  const visible = alerts.filter(a => !dismissed[a.id]);
+  if (!visible.length) { container.innerHTML = ''; return; }
+  container.innerHTML = visible.map(a =>
+    '<div class="alert-banner alert-' + a.type + '" id="alert-' + a.id + '">' +
+    '<i class="' + a.icon + ' alert-banner-icon"></i>' +
+    '<div class="alert-banner-body"><div class="alert-banner-title">' + a.title + '</div><div class="alert-banner-desc">' + a.desc + '</div></div>' +
+    '<button class="alert-dismiss" onclick="dismissAlert(\'' + a.id + '\')"><i class="fas fa-xmark"></i></button></div>'
+  ).join('');
+}
+
+function dismissAlert(id) {
+  const d = JSON.parse(localStorage.getItem('se_dismissed_alerts') || '{}');
+  d[id] = true; localStorage.setItem('se_dismissed_alerts', JSON.stringify(d));
+  const el = document.getElementById('alert-' + id);
+  if (el) el.remove();
+}
+
+function renderDashMedSchedule() {
+  const container = document.getElementById('dash-med-schedule');
+  if (!medSchedule.length) { container.innerHTML = ''; return; }
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const sorted = [...medSchedule].sort((a,b) => a.time.localeCompare(b.time));
+  container.innerHTML = '<div class="card" style="margin-bottom:0;"><div class="card-title"><i class="fas fa-clock-rotate-left"></i> Horario de Medicamentos de Hoy</div><div style="display:flex;flex-wrap:wrap;gap:10px;">' +
+    sorted.map(s => {
+      const [sh,sm] = s.time.split(':').map(Number);
+      const sMin = sh*60+sm;
+      const done = !!localStorage.getItem('se_med_done_' + s.id + '_' + today());
+      const upcoming = sMin > nowMin;
+      const status = done ? 'done' : upcoming ? 'upcoming' : 'missed';
+      const colors = {done:'background:#e8f5f0;color:var(--primary);border-color:var(--primary);', upcoming:'background:#fff8e1;color:var(--warning);border-color:var(--warning);', missed:'background:#fdeaea;color:var(--danger);border-color:var(--danger);'};
+      const icons = {done:'fas fa-circle-check', upcoming:'fas fa-clock', missed:'fas fa-circle-exclamation'};
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;border:1.5px solid;font-size:.82rem;font-weight:600;' + colors[status] + '">' +
+        '<i class="' + icons[status] + '"></i>' + s.time + ' - ' + s.label +
+        (!done && !upcoming ? '<button onclick="markMedDone(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:.75rem;margin-left:4px;" title="Marcar como tomado"><i class="fas fa-check"></i></button>' : '') +
+        (done ? '<span style="font-size:.7rem;opacity:.7;">Tomado</span>' : '') + '</div>';
+    }).join('') + '</div></div>';
+}
+
+function markMedDone(id) {
+  localStorage.setItem('se_med_done_' + id + '_' + today(), '1');
+  renderDashMedSchedule();
+  addActivity('fas fa-pills', '#8b5cf6', 'Medicamento marcado como tomado');
+  toast('Medicamento marcado como tomado');
+}
+
+// ══════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════
+function renderDashboard() {
+  document.getElementById('stat-records').textContent = records.length;
+  document.getElementById('stat-appts').textContent = appts.filter(a => a.status === 'proxima' || a.status === 'próxima').length;
+  document.getElementById('stat-meds').textContent = meds.filter(m => m.status === 'activo').length;
+  document.getElementById('stat-docs').textContent = docs.length;
+  document.getElementById('badge-records').textContent = records.length;
+  document.getElementById('badge-appts').textContent = appts.filter(a => a.status === 'proxima' || a.status === 'próxima').length;
+  document.getElementById('badge-meds').textContent = meds.filter(m => m.status === 'activo').length;
+  document.getElementById('badge-docs').textContent = docs.length;
+  document.getElementById('badge-notes').textContent = notes.length;
+  const h = new Date().getHours();
+  document.getElementById('dash-greeting').textContent = h < 12 ? 'Buenos dias!' : h < 18 ? 'Buenas tardes!' : 'Buenas noches!';
+  const upcoming = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date >= today()).sort((a,b) => a.date.localeCompare(b.date));
+  const na = document.getElementById('dash-next-appt');
+  if (upcoming.length) {
+    const nx = upcoming[0];
+    na.innerHTML = '<div class="appt-upcoming"><i class="fas fa-calendar-star"></i><div><div class="appt-label">Proxima Cita</div><div class="appt-name">' + nx.doctor + ' - ' + (nx.spec||'') + '</div><div class="appt-meta"><i class="fas fa-clock" style="margin-right:5px;"></i>' + fmtDate(nx.date) + ' ' + (nx.time||'') + ' | <i class="fas fa-location-dot" style="margin-right:5px;"></i>' + (nx.place||'Sin lugar especificado') + '</div></div></div>';
+  } else { na.innerHTML = ''; }
+  const ul = document.getElementById('dash-appts-list');
+  if (upcoming.length) {
+    ul.innerHTML = upcoming.slice(0,4).map(a =>
+      '<div class="activity-item"><div class="activity-icon" style="background:#e8f2fa;color:var(--info);"><i class="fas fa-calendar-check"></i></div>' +
+      '<div><div class="activity-text"><strong>' + a.doctor + '</strong> - ' + a.reason + '</div><div class="activity-time">' + fmtDate(a.date) + ' ' + (a.time||'') + '</div></div></div>'
+    ).join('');
+  } else { ul.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-xmark"></i><p>No hay citas proximas</p></div>'; }
+  const al = document.getElementById('dash-activity');
+  if (activity.length) {
+    al.innerHTML = activity.slice(0,6).map(a =>
+      '<div class="activity-item"><div class="activity-icon" style="background:' + a.color + '20;color:' + a.color + ';"><i class="' + a.icon + '"></i></div>' +
+      '<div><div class="activity-text">' + a.text + '</div><div class="activity-time">' + a.time + '</div></div></div>'
+    ).join('');
+  } else { al.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Sin actividad reciente</p></div>'; }
+  renderDashAlerts();
+  renderDashMedSchedule();
+}
+
+// ══════════════════════════════════════════
+//  RECORDS
+// ══════════════════════════════════════════
+let recFilter = 'todos', recSearch = '';
+
+function renderRecords() {
+  let filtered = records.filter(r =>
+    (recFilter === 'todos' || r.type.toLowerCase() === recFilter) &&
+    (r.desc.toLowerCase().includes(recSearch) || (r.doctor||'').toLowerCase().includes(recSearch) || (r.notes||'').toLowerCase().includes(recSearch))
+  );
+  const tb = document.getElementById('records-tbody');
+  const em = document.getElementById('records-empty');
+  if (!filtered.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
+  em.style.display = 'none';
+  tb.innerHTML = filtered.map(r =>
+    '<tr><td>' + fmtDate(r.date) + '</td>' +
+    '<td><span class="tag ' + tagClass(r.type) + '">' + r.type + '</span></td>' +
+    '<td><strong>' + r.desc + '</strong>' + (r.hasPdf ? '<br/><span style="font-size:.75rem;color:#e05252;display:inline-flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer;" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName||'documento.pdf') + '\')"><i class="fas fa-file-pdf"></i> ' + (r.pdfName||'Ver PDF') + '</span>' : '') + '</td>' +
+    '<td>' + (r.doctor||'—') + '</td>' +
+    '<td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.notes||'—') + '</td>' +
+    '<td style="display:flex;gap:5px;">' +
+    (r.hasPdf ? '<button class="btn btn-outline btn-sm" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName||'documento.pdf') + '\')" style="color:#e05252;border-color:#e05252;" title="Ver PDF"><i class="fas fa-file-pdf"></i></button>' : '') +
+    '<button class="btn btn-outline btn-sm" onclick="openEditRecord(\'' + r.id + '\')" style="color:var(--info);border-color:var(--info);" title="Editar"><i class="fas fa-pen"></i></button>' +
+    '<button class="btn btn-danger btn-sm" onclick="deleteRecord(\'' + r.id + '\')" title="Eliminar"><i class="fas fa-trash"></i></button>' +
+    '</td></tr>'
+  ).join('');
+}
+
+function filterRecords(f, el) {
+  recFilter = f;
+  document.querySelectorAll('#record-tabs .pill-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderRecords();
+}
+
+function searchRecords(v) { recSearch = v.toLowerCase(); renderRecords(); }
+
+// PDF Upload
+function pdfDragOver(e, dropId) { e.preventDefault(); document.getElementById(dropId).classList.add('dragover'); }
+function pdfDragLeave(dropId) { document.getElementById(dropId).classList.remove('dragover'); }
+
+function pdfDrop(e, inputId, dropId) {
+  e.preventDefault();
+  document.getElementById(dropId).classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { toast('Solo se permiten archivos PDF', 'warning'); return; }
+  const input = document.getElementById(inputId);
+  const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+  pdfFileSelected(input, dropId);
+}
+
+function pdfFileSelected(input, dropId) {
+  const file = input.files[0];
+  if (!file) return;
+  const drop = document.getElementById(dropId);
+  drop.classList.add('has-file');
+  drop.innerHTML = '<i class="fas fa-file-pdf" style="color:#e05252;"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size/1024).toFixed(0) + ' KB</p>';
+}
+
+function resetPdfUpload() {
+  const input = document.getElementById('rec-pdf-input');
+  const drop = document.getElementById('rec-pdf-drop');
+  const progress = document.getElementById('rec-pdf-progress');
+  if (input) input.value = '';
+  if (drop) { drop.classList.remove('has-file','dragover'); drop.innerHTML = '<i class="fas fa-cloud-arrow-up"></i><p>Haz clic o arrastra un PDF aqui</p><p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>'; }
+  if (progress) progress.style.display = 'none';
+}
+
+async function saveRecord() {
+  const date = document.getElementById('rec-date').value;
+  const type = document.getElementById('rec-type').value;
+  const desc = document.getElementById('rec-desc').value.trim();
+  if (!date || !type || !desc) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const btn = document.getElementById('rec-save-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+  const safetyTimer = setTimeout(() => {
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+    toast('El proceso tardo demasiado. Intenta de nuevo.', 'warning');
+  }, 25000);
+  const r = {id: uid(), date, type, desc, doctor: document.getElementById('rec-doctor').value.trim(), notes: document.getElementById('rec-notes').value.trim(), pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false};
+  const pdfInput = document.getElementById('rec-pdf-input');
+  if (pdfInput && pdfInput.files && pdfInput.files[0]) {
+    try {
+      const safeName = r.id + '_' + pdfInput.files[0].name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const progress = document.getElementById('rec-pdf-progress');
+      const bar = document.getElementById('rec-pdf-bar');
+      if (progress) progress.style.display = 'block';
+      if (bar) bar.style.width = '30%';
+      const result = await odUploadFile(pdfInput.files[0], safeName);
+      if (bar) bar.style.width = '100%';
+      r.pdfName = result.name; r.pdfUrl = result.url; r.driveItemId = result.driveItemId; r.hasPdf = true;
+    } catch(e) {
+      clearTimeout(safetyTimer);
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+      const progress = document.getElementById('rec-pdf-progress');
+      if (progress) progress.style.display = 'none';
+      const saveWithout = confirm('Error al subir PDF:\n' + e.message + '\n\nGuardar el registro sin PDF?');
+      if (!saveWithout) return;
+    }
+  }
+  clearTimeout(safetyTimer);
+  records.unshift(r);
+  await save(KEYS.records, records);
+  addActivity('fas fa-file-medical', '#2a7d5f', 'Nuevo registro: ' + desc + (r.hasPdf ? ' (con PDF)' : ''));
+  closeModal('modal-record');
+  ['rec-date','rec-type','rec-desc','rec-doctor','rec-notes'].forEach(id => document.getElementById(id).value = '');
+  resetPdfUpload();
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+  renderDashboard(); renderRecords();
+  toast(r.hasPdf ? 'Registro guardado con PDF adjunto' : 'Registro guardado');
+}
+
+function openEditRecord(id) {
+  const r = records.find(x => x.id === id); if (!r) return;
+  document.getElementById('edit-rec-id').value = id;
+  document.getElementById('edit-rec-date').value = r.date || '';
+  document.getElementById('edit-rec-type').value = r.type || '';
+  document.getElementById('edit-rec-doctor').value = r.doctor || '';
+  document.getElementById('edit-rec-desc').value = r.desc || '';
+  document.getElementById('edit-rec-notes').value = r.notes || '';
+  const pdfInfo = document.getElementById('edit-rec-pdf-info');
+  const pdfName = document.getElementById('edit-rec-pdf-name');
+  if (r.hasPdf && r.pdfName) { pdfInfo.style.display = 'block'; pdfName.textContent = r.pdfName; }
+  else { pdfInfo.style.display = 'none'; }
+  openModal('modal-edit-record');
+}
+
+async function saveEditRecord() {
+  const id = document.getElementById('edit-rec-id').value;
+  const r = records.find(x => x.id === id); if (!r) return;
+  const date = document.getElementById('edit-rec-date').value;
+  const type = document.getElementById('edit-rec-type').value;
+  const desc = document.getElementById('edit-rec-desc').value.trim();
+  if (!date || !type || !desc) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  r.date = date; r.type = type; r.desc = desc;
+  r.doctor = document.getElementById('edit-rec-doctor').value.trim();
+  r.notes = document.getElementById('edit-rec-notes').value.trim();
+  await save(KEYS.records, records);
+  addActivity('fas fa-pen', '#3a8fc4', 'Registro editado: ' + desc);
+  closeModal('modal-edit-record');
+  renderRecords(); renderDashboard();
+  toast('Registro actualizado');
+}
+
+async function viewRecordPdf(recordId, fileName) {
+  const rec = records.find(r => r.id === recordId);
+  if (rec && rec.pdfUrl) { window.open(rec.pdfUrl, '_blank'); return; }
+  toast('PDF no encontrado', 'warning');
+}
+
+let _deleteRecordId = null;
+
+function deleteRecord(id) {
+  const r = records.find(x => x.id === id); if (!r) return;
+  _deleteRecordId = id;
+  document.getElementById('delete-rec-desc-preview').textContent = r.desc;
+  document.getElementById('delete-rec-meta-preview').textContent = fmtDate(r.date) + ' - ' + r.type + (r.doctor ? ' - ' + r.doctor : '');
+  document.getElementById('delete-rec-pdf-warning').textContent = r.hasPdf ? 'Este registro tiene un PDF adjunto que tambien sera eliminado de OneDrive.' : '';
+  document.getElementById('delete-rec-confirm-input').value = '';
+  document.getElementById('delete-rec-confirm-btn').disabled = true;
+  openModal('modal-delete-record');
+}
+
+function checkDeleteConfirm() {
+  const val = document.getElementById('delete-rec-confirm-input').value.trim().toUpperCase();
+  document.getElementById('delete-rec-confirm-btn').disabled = (val !== 'ELIMINAR');
+}
+
+async function confirmDeleteRecord() {
+  const id = _deleteRecordId; if (!id) return;
+  const r = records.find(x => x.id === id);
+  if (r && r.hasPdf && r.driveItemId) await odDeleteFile(r.driveItemId).catch(e => console.warn('Delete PDF:', e));
+  records = records.filter(r => r.id !== id);
+  await save(KEYS.records, records);
+  closeModal('modal-delete-record');
+  _deleteRecordId = null;
+  renderRecords(); renderDashboard();
+  toast('Registro eliminado');
+}
+
+// ══════════════════════════════════════════
+//  APPOINTMENTS
+// ══════════════════════════════════════════
+let apptFilter = 'todas';
+
+function renderAppts() {
+  let filtered = appts.filter(a => apptFilter === 'todas' || a.status === apptFilter);
+  filtered.sort((a,b) => a.date.localeCompare(b.date));
+  const tb = document.getElementById('appts-tbody');
+  const em = document.getElementById('appts-empty');
+  if (!filtered.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
+  em.style.display = 'none';
+  tb.innerHTML = filtered.map(a =>
+    '<tr><td><strong>' + fmtDate(a.date) + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.time||'') + '</span></td>' +
+    '<td><strong>' + a.doctor + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.spec||'') + '</span></td>' +
+    '<td>' + a.reason + (a.comments ? '<br/><span style="font-size:.75rem;color:var(--ink3);font-style:italic;"><i class="fas fa-comment-medical" style="margin-right:3px;"></i>' + a.comments.slice(0,60) + (a.comments.length>60?'...':'') + '</span>' : '') + '</td>' +
+    '<td>' + (a.place||'—') + '</td>' +
+    '<td><span class="tag ' + tagClass(a.status) + '">' + a.status + '</span></td>' +
+    '<td style="display:flex;gap:5px;flex-wrap:wrap;">' +
+    '<button class="btn btn-outline btn-sm" onclick="openEditAppt(\'' + a.id + '\')" style="color:var(--ink2);border-color:var(--border);" title="Editar"><i class="fas fa-pen"></i></button>' +
+    ((a.status === 'proxima' || a.status === 'próxima') ? '<button class="btn btn-outline btn-sm" onclick="openCompleteAppt(\'' + a.id + '\')" title="Marcar completada"><i class="fas fa-check"></i></button><button class="btn btn-outline btn-sm" onclick="exportApptICS(\'' + a.id + '\')" style="color:var(--info);border-color:var(--info);" title="Agregar al calendario"><i class="fas fa-calendar-plus"></i></button>' : '') +
+    '<button class="btn btn-danger btn-sm" onclick="deleteAppt(\'' + a.id + '\')"><i class="fas fa-trash"></i></button>' +
+    '</td></tr>'
+  ).join('');
+}
+
+function filterAppts(f, el) {
+  apptFilter = f;
+  document.querySelectorAll('#page-appointments .pill-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderAppts();
+}
+
+function populateDoctorSelector() {
+  const sel = document.getElementById('appt-doc-select'); if (!sel) return;
+  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
+    sel.appendChild(opt);
+  });
+}
+
+function fillDoctorFromContact(docId) {
+  if (!docId) return;
+  const d = docs.find(x => x.id === docId); if (!d) return;
+  document.getElementById('appt-doctor').value = d.name;
+  document.getElementById('appt-spec').value = d.spec || '';
+  document.getElementById('appt-place').value = d.clinic || d.address || '';
+  document.getElementById('appt-new-doc-hint').style.display = 'none';
+}
+
+function checkNewDoctor() {
+  const name = document.getElementById('appt-doctor').value.trim();
+  const hint = document.getElementById('appt-new-doc-hint');
+  if (!name) { hint.style.display = 'none'; return; }
+  const exists = docs.some(d => d.name.toLowerCase() === name.toLowerCase());
+  hint.style.display = exists ? 'none' : 'block';
+}
+
+async function saveAppt() {
+  const date = document.getElementById('appt-date').value;
+  const doctor = document.getElementById('appt-doctor').value.trim();
+  const reason = document.getElementById('appt-reason').value.trim();
+  if (!date || !doctor || !reason) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const a = {id: uid(), date, time: document.getElementById('appt-time').value, doctor, spec: document.getElementById('appt-spec').value.trim(), reason, place: document.getElementById('appt-place').value.trim(), status: document.getElementById('appt-status').value, notes: document.getElementById('appt-notes').value.trim(), comments: ''};
+  appts.unshift(a);
+  await save(KEYS.appts, appts);
+  // Auto-save new doctor
+  const exists = docs.some(d => d.name.toLowerCase() === doctor.toLowerCase());
+  if (!exists) {
+    const newDoc = {id: uid(), name: doctor, spec: a.spec||'', phone: document.getElementById('appt-new-doc-phone').value.trim(), email: '', clinic: a.place||'', address: document.getElementById('appt-new-doc-address').value.trim(), notes: 'Agregado automaticamente desde cita'};
+    docs.unshift(newDoc);
+    await save(KEYS.docs, docs);
+    addActivity('fas fa-user-doctor', '#e05252', 'Medico agregado automaticamente: ' + doctor);
+    toast('Cita guardada - ' + doctor + ' agregado a Contactos');
+  } else {
+    toast('Cita guardada');
+  }
+  addActivity('fas fa-calendar-plus', '#3a8fc4', 'Nueva cita: ' + doctor + ' - ' + fmtDate(date));
+  closeModal('modal-appt');
+  ['appt-date','appt-time','appt-doctor','appt-spec','appt-reason','appt-place','appt-notes','appt-new-doc-phone','appt-new-doc-address'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('appt-status').value = 'proxima';
+  document.getElementById('appt-doc-select').value = '';
+  document.getElementById('appt-new-doc-hint').style.display = 'none';
+  renderDashboard();
+}
+
+let _completeApptId = null;
+
+function openCompleteAppt(id) {
+  const a = appts.find(x => x.id === id); if (!a) return;
+  _completeApptId = id;
+  document.getElementById('complete-appt-info').innerHTML = '<i class="fas fa-calendar-check" style="color:var(--primary);margin-right:8px;"></i><strong>' + a.doctor + '</strong> - ' + a.reason + '<br/><span style="font-size:.8rem;color:var(--ink3);">' + fmtDate(a.date) + ' ' + (a.time||'') + ' | ' + (a.place||'Sin lugar') + '</span>';
+  document.getElementById('complete-appt-comments').value = '';
+  document.getElementById('complete-appt-record').value = 'yes';
+  openModal('modal-complete-appt');
+}
+
+async function confirmCompleteAppt() {
+  const a = appts.find(x => x.id === _completeApptId); if (!a) return;
+  const comments = document.getElementById('complete-appt-comments').value.trim();
+  const createRecord = document.getElementById('complete-appt-record').value === 'yes';
+  a.status = 'completada'; a.comments = comments;
+  await save(KEYS.appts, appts);
+  if (createRecord) {
+    const r = {id: uid(), date: a.date, type: 'Diagnostico', desc: 'Consulta: ' + a.reason, doctor: a.doctor, notes: comments || a.notes || '', pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false};
+    records.unshift(r);
+    await save(KEYS.records, records);
+    addActivity('fas fa-file-medical', '#2a7d5f', 'Registro creado desde cita: ' + a.reason);
+  }
+  addActivity('fas fa-circle-check', '#2a7d5f', 'Cita completada: ' + a.doctor + (comments ? ' - ' + comments.slice(0,40) : ''));
+  closeModal('modal-complete-appt');
+  _completeApptId = null;
+  renderAppts(); renderDashboard();
+  toast(createRecord ? 'Cita completada y registro de salud creado' : 'Cita marcada como completada');
+}
+
+function openEditAppt(id) {
+  const a = appts.find(x => x.id === id); if (!a) return;
+  document.getElementById('edit-appt-id').value = id;
+  document.getElementById('edit-appt-date').value = a.date || '';
+  document.getElementById('edit-appt-time').value = a.time || '';
+  document.getElementById('edit-appt-doctor').value = a.doctor || '';
+  document.getElementById('edit-appt-spec').value = a.spec || '';
+  document.getElementById('edit-appt-reason').value = a.reason || '';
+  document.getElementById('edit-appt-place').value = a.place || '';
+  document.getElementById('edit-appt-status').value = a.status || 'proxima';
+  document.getElementById('edit-appt-notes').value = a.notes || '';
+  document.getElementById('edit-appt-comments').value = a.comments || '';
+  openModal('modal-edit-appt');
+}
+
+async function saveEditAppt() {
+  const id = document.getElementById('edit-appt-id').value;
+  const a = appts.find(x => x.id === id); if (!a) return;
+  const prevStatus = a.status;
+  a.date = document.getElementById('edit-appt-date').value;
+  a.time = document.getElementById('edit-appt-time').value;
+  a.doctor = document.getElementById('edit-appt-doctor').value.trim();
+  a.spec = document.getElementById('edit-appt-spec').value.trim();
+  a.reason = document.getElementById('edit-appt-reason').value.trim();
+  a.place = document.getElementById('edit-appt-place').value.trim();
+  a.status = document.getElementById('edit-appt-status').value;
+  a.notes = document.getElementById('edit-appt-notes').value.trim();
+  a.comments = document.getElementById('edit-appt-comments').value.trim();
+  await save(KEYS.appts, appts);
+  const statusChanged = prevStatus !== a.status ? ' (' + prevStatus + ' -> ' + a.status + ')' : '';
+  addActivity('fas fa-pen-to-square', '#3a8fc4', 'Cita editada: ' + a.doctor + statusChanged);
+  closeModal('modal-edit-appt');
+  renderAppts(); renderDashboard();
+  toast('Cita actualizada');
+}
+
+async function deleteAppt(id) {
+  if (!confirm('Eliminar esta cita?')) return;
+  appts = appts.filter(a => a.id !== id);
+  await save(KEYS.appts, appts);
+  renderAppts(); renderDashboard();
+  toast('Cita eliminada');
+}
+
+async function completeAppt(id) {
+  const a = appts.find(x => x.id === id); if (!a) return;
+  a.status = 'completada';
+  await save(KEYS.appts, appts);
+  addActivity('fas fa-circle-check', '#2a7d5f', 'Cita completada: ' + a.doctor);
+  renderAppts(); renderDashboard();
+  toast('Cita marcada como completada');
+}
+
+// ══════════════════════════════════════════
+//  MEDICATIONS
+// ══════════════════════════════════════════
+let medFilter = 'todos';
+
+function renderMeds() {
+  let filtered = meds.filter(m => medFilter === 'todos' || m.status === medFilter);
+  const grid = document.getElementById('meds-grid');
+  const em = document.getElementById('meds-empty');
+  if (!filtered.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
+  em.style.display = 'none';
+  grid.innerHTML = filtered.map(m =>
+    '<div class="med-card"><div class="med-name"><i class="fas fa-capsules" style="color:var(--primary);margin-right:6px;"></i>' + m.name + '</div>' +
+    '<div class="med-dose">' + m.dose + ' - ' + m.freq + '</div>' +
+    '<div class="med-detail"><i class="fas fa-route"></i>' + m.route + '</div>' +
+    '<div class="med-detail"><i class="fas fa-calendar-day"></i>Desde: ' + fmtDate(m.start) + '</div>' +
+    (m.doctor ? '<div class="med-detail"><i class="fas fa-user-doctor"></i>' + m.doctor + '</div>' : '') +
+    (m.notes ? '<div class="med-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + m.notes + '</div>' : '') +
+    '<div style="margin-top:10px;"><span class="tag ' + tagClass(m.status) + '">' + m.status + '</span></div>' +
+    '<div class="med-actions">' +
+    (m.status === 'activo' ? '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-pause"></i> Suspender</button>' : '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-play"></i> Activar</button>') +
+    '<button class="btn btn-danger btn-sm" onclick="deleteMed(\'' + m.id + '\')"><i class="fas fa-trash"></i></button>' +
+    '</div></div>'
+  ).join('');
+}
+
+function filterMeds(f, el) {
+  medFilter = f;
+  document.querySelectorAll('#page-medications .pill-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMeds();
+}
+
+async function saveMed() {
+  const name = document.getElementById('med-name').value.trim();
+  const dose = document.getElementById('med-dose').value.trim();
+  if (!name || !dose) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const m = {id: uid(), name, dose, freq: document.getElementById('med-freq').value, route: document.getElementById('med-route').value, start: document.getElementById('med-start').value, status: document.getElementById('med-status').value, doctor: document.getElementById('med-doctor').value.trim(), notes: document.getElementById('med-notes').value.trim()};
+  meds.unshift(m);
+  await save(KEYS.meds, meds);
+  addActivity('fas fa-pills', '#f0a500', 'Medicamento agregado: ' + name + ' ' + dose);
+  closeModal('modal-med');
+  ['med-name','med-dose','med-doctor','med-notes','med-start'].forEach(id => document.getElementById(id).value = '');
+  renderDashboard(); toast('Medicamento guardado');
+}
+
+async function toggleMed(id) {
+  const m = meds.find(x => x.id === id); if (!m) return;
+  m.status = m.status === 'activo' ? 'suspendido' : 'activo';
+  await save(KEYS.meds, meds);
+  renderMeds(); renderDashboard();
+  toast('Medicamento ' + m.status);
+}
+
+async function deleteMed(id) {
+  if (!confirm('Eliminar este medicamento?')) return;
+  meds = meds.filter(m => m.id !== id);
+  await save(KEYS.meds, meds);
+  renderMeds(); renderDashboard();
+  toast('Medicamento eliminado');
+}
+
+// ══════════════════════════════════════════
+//  DOCTORS
+// ══════════════════════════════════════════
+let docSearch = '';
+
+function renderDocs() {
+  let filtered = docs.filter(d => d.name.toLowerCase().includes(docSearch) || d.spec.toLowerCase().includes(docSearch));
+  const grid = document.getElementById('docs-grid');
+  const em = document.getElementById('docs-empty');
+  if (!filtered.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
+  em.style.display = 'none';
+  grid.innerHTML = filtered.map(d =>
+    '<div class="doc-card"><div class="doc-avatar"><i class="fas fa-user-doctor"></i></div>' +
+    '<div class="doc-info"><div class="doc-name">' + d.name + '</div><div class="doc-spec">' + d.spec + '</div>' +
+    (d.phone ? '<div class="doc-detail"><i class="fas fa-phone"></i>' + d.phone + '</div>' : '') +
+    (d.email ? '<div class="doc-detail"><i class="fas fa-envelope"></i>' + d.email + '</div>' : '') +
+    (d.clinic ? '<div class="doc-detail"><i class="fas fa-hospital"></i>' + d.clinic + '</div>' : '') +
+    (d.address ? '<div class="doc-detail"><i class="fas fa-location-dot"></i>' + d.address + '</div>' : '') +
+    (d.notes ? '<div class="doc-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + d.notes + '</div>' : '') +
+    '<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openEditDoc(\'' + d.id + '\')"><i class="fas fa-pen"></i> Editar</button><button class="btn btn-danger btn-sm" onclick="deleteDoc(\'' + d.id + '\')"><i class="fas fa-trash"></i> Eliminar</button></div>' +
+    '</div></div>'
+  ).join('');
+}
+
+function searchDocs(v) { docSearch = v.toLowerCase(); renderDocs(); }
+
+function openAddDoc() {
+  document.getElementById('doc-edit-id').value = '';
+  document.getElementById('modal-doc-title').innerHTML = '<i class="fas fa-user-doctor" style="color:var(--primary);margin-right:8px;"></i>Agregar Medico';
+  document.getElementById('doc-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar';
+  ['doc-name','doc-spec','doc-phone','doc-email','doc-clinic','doc-address','doc-notes'].forEach(id => document.getElementById(id).value = '');
+  openModal('modal-doc');
+}
+
+function openEditDoc(id) {
+  const d = docs.find(x => x.id === id); if (!d) return;
+  document.getElementById('doc-edit-id').value = id;
+  document.getElementById('modal-doc-title').innerHTML = '<i class="fas fa-pen" style="color:var(--primary);margin-right:8px;"></i>Editar Medico';
+  document.getElementById('doc-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+  document.getElementById('doc-name').value = d.name || '';
+  document.getElementById('doc-spec').value = d.spec || '';
+  document.getElementById('doc-phone').value = d.phone || '';
+  document.getElementById('doc-email').value = d.email || '';
+  document.getElementById('doc-clinic').value = d.clinic || '';
+  document.getElementById('doc-address').value = d.address || '';
+  document.getElementById('doc-notes').value = d.notes || '';
+  openModal('modal-doc');
+}
+
+async function saveDoc() {
+  const name = document.getElementById('doc-name').value.trim();
+  const spec = document.getElementById('doc-spec').value.trim();
+  if (!name || !spec) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const editId = document.getElementById('doc-edit-id').value;
+  const fields = {name, spec, phone: document.getElementById('doc-phone').value.trim(), email: document.getElementById('doc-email').value.trim(), clinic: document.getElementById('doc-clinic').value.trim(), address: document.getElementById('doc-address').value.trim(), notes: document.getElementById('doc-notes').value.trim()};
+  if (editId) {
+    const d = docs.find(x => x.id === editId);
+    if (d) { Object.assign(d, fields); await save(KEYS.docs, docs); addActivity('fas fa-pen', '#e05252', 'Medico actualizado: ' + name); toast('Medico actualizado'); }
+  } else {
+    docs.unshift({id: uid(), ...fields});
+    await save(KEYS.docs, docs);
+    addActivity('fas fa-user-doctor', '#e05252', 'Medico agregado: ' + name);
+    toast('Medico guardado');
+  }
+  closeModal('modal-doc');
+  renderDocs(); renderDashboard();
+}
+
+async function deleteDoc(id) {
+  if (!confirm('Eliminar este medico?')) return;
+  docs = docs.filter(d => d.id !== id);
+  await save(KEYS.docs, docs);
+  renderDocs(); renderDashboard();
+  toast('Medico eliminado');
+}
+
+// ══════════════════════════════════════════
+//  NOTES
+// ══════════════════════════════════════════
+function renderNotes() {
+  const grid = document.getElementById('notes-grid');
+  const em = document.getElementById('notes-empty');
+  if (!notes.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
+  em.style.display = 'none';
+  const catColors = {General:'tag-gray', Sintomas:'tag-red', Dieta:'tag-green', Ejercicio:'tag-blue', Estado:'tag-yellow', Emergencia:'tag-red'};
+  grid.innerHTML = notes.map(n =>
+    '<div class="note-card"><div class="note-header"><div><div class="note-title">' + n.title + '</div><span class="tag ' + (catColors[n.cat]||'tag-gray') + '" style="margin-top:4px;display:inline-block;">' + n.cat + '</span></div><div class="note-date">' + n.date + '</div></div>' +
+    '<div class="note-body">' + n.body + '</div>' +
+    '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author||'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>'
+  ).join('');
+}
+
+async function saveNote() {
+  const title = document.getElementById('note-title').value.trim();
+  const body = document.getElementById('note-body').value.trim();
+  if (!title || !body) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const n = {id: uid(), title, body, author: document.getElementById('note-author').value.trim() || msUserName || 'Yo', cat: document.getElementById('note-cat').value, date: new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'})};
+  notes.unshift(n);
+  await save(KEYS.notes, notes);
+  addActivity('fas fa-notes-medical', '#3a8fc4', 'Nueva nota: ' + title);
+  closeModal('modal-note');
+  ['note-title','note-author','note-body'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('note-cat').value = 'General';
+  renderDashboard(); toast('Nota guardada');
+}
+
+async function deleteNote(id) {
+  if (!confirm('Eliminar esta nota?')) return;
+  notes = notes.filter(n => n.id !== id);
+  await save(KEYS.notes, notes);
+  renderNotes(); renderDashboard();
+  toast('Nota eliminada');
+}
+
+// ══════════════════════════════════════════
+//  REMINDERS PAGE
+// ══════════════════════════════════════════
+function renderRemindersPage() {
+  document.getElementById('tog-1day').checked = !!reminderSettings.oneDay;
+  document.getElementById('tog-2hr').checked = !!reminderSettings.twoHour;
+  document.getElementById('tog-30min').checked = !!reminderSettings.thirtyMin;
+  document.getElementById('tog-morning').checked = !!reminderSettings.morning;
+  document.getElementById('morning-time').value = reminderSettings.morningTime || '08:00';
+  ['1day','2hr','30min','morning'].forEach(k => {
+    const card = document.getElementById('rc-' + k);
+    const tog = document.getElementById('tog-' + k);
+    if (card && tog) card.classList.toggle('active-reminder', tog.checked);
+  });
+  updatePermBanners();
+  renderMedScheduleChips();
+  renderNotifHistory();
+}
+
+function saveReminderSettings() {
+  reminderSettings.oneDay = document.getElementById('tog-1day').checked;
+  reminderSettings.twoHour = document.getElementById('tog-2hr').checked;
+  reminderSettings.thirtyMin = document.getElementById('tog-30min').checked;
+  reminderSettings.morning = document.getElementById('tog-morning').checked;
+  reminderSettings.morningTime = document.getElementById('morning-time').value;
+  saveObj('se_reminders', reminderSettings);
+  ['1day','2hr','30min','morning'].forEach(k => {
+    const card = document.getElementById('rc-' + k);
+    const tog = document.getElementById('tog-' + k);
+    if (card && tog) card.classList.toggle('active-reminder', tog.checked);
+  });
+  toast('Configuracion de recordatorios guardada');
+}
+
+function addMedSchedule() {
+  const time = document.getElementById('new-med-time').value;
+  const label = document.getElementById('new-med-label').value.trim();
+  if (!time || !label) { toast('Ingresa hora y nombre del medicamento', 'warning'); return; }
+  medSchedule.push({id: uid(), time, label});
+  save(KEYS.medSchedule, medSchedule);
+  document.getElementById('new-med-time').value = '';
+  document.getElementById('new-med-label').value = '';
+  renderMedScheduleChips();
+  renderDashMedSchedule();
+  toast('Horario ' + time + ' - ' + label + ' agregado');
+}
+
+function removeMedSchedule(id) {
+  medSchedule = medSchedule.filter(s => s.id !== id);
+  save(KEYS.medSchedule, medSchedule);
+  renderMedScheduleChips();
+  renderDashMedSchedule();
+}
+
+function renderMedScheduleChips() {
+  const chips = document.getElementById('med-schedule-chips');
+  const empty = document.getElementById('med-schedule-empty');
+  if (!chips) return;
+  if (!medSchedule.length) { chips.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  chips.innerHTML = medSchedule.map(s =>
+    '<div class="time-chip"><i class="fas fa-clock"></i>' + s.time + ' - ' + s.label +
+    '<button onclick="removeMedSchedule(\'' + s.id + '\')" title="Eliminar"><i class="fas fa-xmark"></i></button></div>'
+  ).join('');
+}
+
+function renderNotifHistory() {
+  const list = document.getElementById('notif-history-list');
+  const empty = document.getElementById('notif-history-empty');
+  if (!list) return;
+  if (!notifications.length) { list.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  const urgencyIcon = {urgent:'fas fa-triangle-exclamation', warning:'fas fa-clock', info:'fas fa-calendar-check', med:'fas fa-pills'};
+  const urgencyColor = {urgent:'var(--danger)', warning:'var(--warning)', info:'var(--info)', med:'#8b5cf6'};
+  list.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Titulo</th><th>Descripcion</th><th>Fecha/Hora</th></tr></thead><tbody>' +
+    notifications.slice(0,15).map(n =>
+      '<tr><td><i class="' + (urgencyIcon[n.urgency]||'fas fa-bell') + '" style="color:' + (urgencyColor[n.urgency]||'var(--ink3)') + ';"></i></td>' +
+      '<td><strong>' + n.title + '</strong></td>' +
+      '<td style="font-size:.82rem;">' + n.desc + '</td>' +
+      '<td style="font-size:.78rem;color:var(--ink3);">' + new Date(n.time).toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) + '</td></tr>'
+    ).join('') + '</tbody></table></div>';
+}
+
+// ══════════════════════════════════════════
+//  CALENDAR ICS EXPORT
+// ══════════════════════════════════════════
+function fmtICSDate(date, time) {
+  const d = date.replace(/-/g,'');
+  if (!time) return d;
+  const t = time.replace(':','') + '00';
+  return d + 'T' + t;
+}
+
+function fmtICSDateEnd(date, time) {
+  if (!date) return '';
+  const dt = new Date(date + 'T' + (time||'09:00'));
+  dt.setHours(dt.getHours()+1);
+  const pad = n => String(n).padStart(2,'0');
+  return dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'T'+pad(dt.getHours())+pad(dt.getMinutes())+'00';
+}
+
+function buildICSEvent(a) {
+  const now = new Date();
+  const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+'00Z';
+  const start = fmtICSDate(a.date, a.time);
+  const end = fmtICSDateEnd(a.date, a.time);
+  const patName = settings.patname || 'Elena';
+  return [
+    'BEGIN:VEVENT',
+    'UID:saludelena-' + a.id + '@saludelena',
+    'DTSTAMP:' + stamp,
+    'DTSTART:' + start,
+    'DTEND:' + end,
+    'SUMMARY:Cita medica - ' + a.doctor,
+    'DESCRIPTION:Paciente: ' + patName + '\\nMotivo: ' + a.reason + '\\nEspecialidad: ' + (a.spec||'—') + '\\nNotas: ' + (a.notes||'—'),
+    'LOCATION:' + (a.place||''),
+    'CATEGORIES:SALUD,CITA MEDICA',
+    'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Recordatorio: Cita manana con ' + a.doctor, 'END:VALARM',
+    'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Recordatorio: Cita en 2 horas con ' + a.doctor, 'END:VALARM',
+    'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 30 minutos con ' + a.doctor + '!', 'END:VALARM',
+    'END:VEVENT'
+  ].join('\r\n');
+}
+
+function buildICSFile(events) {
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Salud Elena//Portal de Salud Elena//ES','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Salud Elena - Citas Medicas','X-WR-TIMEZONE:America/Mexico_City',...events,'END:VCALENDAR'].join('\r\n');
+}
+
+function downloadICS(content, filename) {
+  const blob = new Blob([content], {type:'text/calendar;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportApptICS(id) {
+  const a = appts.find(x => x.id === id);
+  if (!a) { toast('Cita no encontrada', 'warning'); return; }
+  if (!a.date || !a.time) { toast('La cita necesita fecha y hora para exportar al calendario', 'warning'); return; }
+  const ics = buildICSFile([buildICSEvent(a)]);
+  downloadICS(ics, 'cita_' + a.doctor.replace(/\s+/g,'_') + '_' + a.date + '.ics');
+  addActivity('fas fa-calendar-arrow-up', '#3a8fc4', 'Cita exportada al calendario: ' + a.doctor);
+  toast('Evento descargado: cita_' + a.date + '.ics');
+}
+
+function exportAllApptICS() {
+  const upcoming = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time);
+  if (!upcoming.length) { toast('No hay citas proximas con fecha y hora para exportar', 'warning'); return; }
+  const ics = buildICSFile(upcoming.map(buildICSEvent));
+  downloadICS(ics, 'salud_elena_citas_' + today() + '.ics');
+  addActivity('fas fa-calendar-arrow-up', '#3a8fc4', upcoming.length + ' cita(s) exportadas al calendario');
+  toast(upcoming.length + ' cita(s) exportadas al calendario');
+}
+
+// ══════════════════════════════════════════
+//  EXPORT DATA
+// ══════════════════════════════════════════
+function exportData() {
+  const data = {records, appts, meds, docs, notes, settings, medSchedule, exportDate: new Date().toISOString()};
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'saludelena_backup_' + today() + '.json'; a.click();
+  toast('Datos exportados');
+}
+
+// ══════════════════════════════════════════
+//  POLLING ENGINE
+// ══════════════════════════════════════════
+function runReminderEngine() {
+  checkAppointmentReminders();
+  checkMedSchedule();
+  checkMorningSummary();
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+(function init() {
+  const hasToken = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
+  if (hasToken) {
+    document.getElementById('login-screen').style.display = 'none';
+    msUserName = localStorage.getItem('ms_user_name') || 'Usuario';
+    document.getElementById('user-name').textContent = msUserName;
+    document.getElementById('user-avatar').textContent = msUserName.slice(0,2).toUpperCase();
+    updateTopbarFamilyCode();
+    // Load fresh data from OneDrive
+    loadAllFromOneDrive().then(() => {
+      renderDashboard();
+      updateBellBadge();
+      renderNotifPanel();
+    }).catch(e => {
+      console.warn('OneDrive load error:', e);
+      renderDashboard();
+    });
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+  runReminderEngine();
+  setInterval(runReminderEngine, 60000);
+})();
+</script>
+
+</body>
+</html>
