@@ -394,6 +394,7 @@
 <div class="pill-tab" onclick="filterRecords('laboratorio',this)">Laboratorio</div>
 <div class="pill-tab" onclick="filterRecords('imagen',this)">Imágenes</div>
 <div class="pill-tab" onclick="filterRecords('cirugía',this)">Cirugías</div>
+      <div class="pill-tab" onclick="filterRecords('receta',this)">Recetas</div>
 </div>
 <div class="search-bar"><i class="fas fa-magnifying-glass"></i><input id="search-records" oninput="searchRecords(this.value)" placeholder="Buscar registros..." type="text"/></div>
 <div class="card"><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Médico</th><th>Notas</th><th>Acciones</th></tr></thead><tbody id="records-tbody"></tbody></table></div><div class="empty-state" id="records-empty" style="display:none;"><i class="fas fa-folder-open"></i><p>No hay registros. Agrega el primero.</p></div></div>
@@ -551,8 +552,14 @@
 <div class="modal-header"><div class="modal-title"><i class="fas fa-file-medical" style="color:var(--primary);margin-right:8px;"></i>Nuevo Registro de Salud</div><button class="modal-close" onclick="closeModal('modal-record')"><i class="fas fa-xmark"></i></button></div>
 <div class="form-group"><label class="form-label">Fecha del registro *</label><input class="form-control" id="rec-date" type="date"/></div>
 <div class="form-row">
-<div class="form-group"><label class="form-label">Tipo *</label><select class="form-control" id="rec-type"><option value="">Seleccionar...</option><option>Diagnóstico</option><option>Laboratorio</option><option>Imagen</option><option>Cirugía</option><option>Otro</option></select></div>
-<div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="rec-doctor" placeholder="Nombre del médico"/></div>
+<div class="form-group"><label class="form-label">Tipo *</label><select class="form-control" id="rec-type"><option value="">Seleccionar...</option><option>Diagnóstico</option><option>Laboratorio</option><option>Imagen</option><option>Cirugía</option><option>Receta</option><option>Otro</option></select></div>
+<div class="form-group">
+      <label class="form-label">Seleccionar médico de contactos</label>
+      <select class="form-control" id="rec-doc-select" onchange="fillRecordDoctor(this.value)">
+        <option value="">— Elegir de mis médicos registrados —</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="rec-doctor" placeholder="Nombre del médico"/></div>
 </div>
 <div class="form-group"><label class="form-label">Descripción *</label><input class="form-control" id="rec-desc" placeholder="Ej: Diagnóstico de hipertensión arterial"/></div>
 <div class="form-group"><label class="form-label">Notas adicionales</label><textarea class="form-control" id="rec-notes" placeholder="Observaciones, resultados, indicaciones..." rows="3"></textarea></div>
@@ -660,8 +667,19 @@
 <div class="form-group"><label class="form-label">Autor</label><input class="form-control" id="note-author" placeholder="Tu nombre"/></div>
 <div class="form-group"><label class="form-label">Categoría</label><select class="form-control" id="note-cat"><option>General</option><option>Síntomas</option><option>Dieta</option><option>Ejercicio</option><option>Estado de ánimo</option><option>Emergencia</option></select></div>
 </div>
-<div class="form-group"><label class="form-label">Contenido *</label><textarea class="form-control" id="note-body" placeholder="Escribe tu observación aquí..." rows="5"></textarea></div>
-<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-note')">Cancelar</button><button class="btn btn-primary" onclick="saveNote()"><i class="fas fa-save"></i> Guardar</button></div>
+<div class="form-group"><label class="form-label">Contenido *</label><textarea class="form-control" id="note-body" placeholder="Escribe tu observacion aqui..." rows="4"></textarea></div>
+<div class="form-group">
+  <label class="form-label"><i class="fas fa-image" style="color:var(--info);margin-right:5px;"></i>Imagen adjunta (opcional)</label>
+  <div class="pdf-upload-area" id="note-img-drop" onclick="document.getElementById('note-img-input').click()" ondragover="pdfDragOver(event,'note-img-drop')" ondragleave="pdfDragLeave('note-img-drop')" ondrop="noteImgDrop(event)" style="border-color:var(--info);">
+    <i class="fas fa-image" style="color:var(--ink3);"></i>
+    <p>Haz clic o arrastra una imagen aqui</p>
+    <p style="font-size:.72rem;margin-top:2px;">JPG, PNG, GIF - Se guarda en OneDrive</p>
+  </div>
+  <input type="file" id="note-img-input" accept="image/*" style="display:none;" onchange="noteImgSelected(this)"/>
+  <div class="pdf-progress" id="note-img-progress"><div class="pdf-progress-bar" id="note-img-bar"></div></div>
+  <div id="note-img-preview" style="margin-top:8px;"></div>
+</div>
+<div class="form-actions"><button class="btn btn-outline" onclick="closeModal('modal-note')">Cancelar</button><button class="btn btn-primary" id="note-save-btn" onclick="saveNote()"><i class="fas fa-save"></i> Guardar</button></div>
 </div>
 </div>
 <!-- Modal: Completar Cita (confirmación con comentarios) -->
@@ -728,7 +746,7 @@
     <select class="form-control" id="edit-rec-type">
       <option value="">Seleccionar...</option>
       <option>Diagnóstico</option><option>Laboratorio</option><option>Imagen</option>
-      <option>Cirugía</option><option>Otro</option>
+      <option>Cirugía</option><option>Receta</option><option>Otro</option>
     </select>
   </div>
   <div class="form-group"><label class="form-label">Médico</label><input class="form-control" id="edit-rec-doctor" placeholder="Nombre del médico"/></div>
@@ -1133,7 +1151,7 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 // ══════════════════════════════════════════
 function openModal(id) {
   document.getElementById(id).classList.add('open');
-  if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); }
+  if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); populateRecordDoctorSelector(); }
   if (id === 'modal-appt') { document.getElementById('appt-date').value = today(); populateDoctorSelector(); document.getElementById('appt-new-doc-hint').style.display = 'none'; }
   if (id === 'modal-med') document.getElementById('med-start').value = today();
   if (id === 'modal-share') document.getElementById('share-link').value = window.location.href;
@@ -1169,7 +1187,7 @@ function addActivity(icon, color, text) {
 function copyLink() { navigator.clipboard.writeText(document.getElementById('share-link').value).then(() => toast('Enlace copiado!')); }
 
 function tagClass(type) {
-  const map = {diagnostico:'tag-blue', 'diagnóstico':'tag-blue', laboratorio:'tag-yellow', imagen:'tag-green', cirugia:'tag-red', 'cirugía':'tag-red', proxima:'tag-blue', 'próxima':'tag-blue', completada:'tag-green', cancelada:'tag-red', reprogramada:'tag-orange', activo:'tag-green', suspendido:'tag-gray'};
+  const map = {diagnostico:'tag-blue', 'diagnóstico':'tag-blue', laboratorio:'tag-yellow', imagen:'tag-green', cirugia:'tag-red', 'cirugía':'tag-red', receta:'tag-orange', proxima:'tag-blue', 'próxima':'tag-blue', completada:'tag-green', cancelada:'tag-red', reprogramada:'tag-orange', activo:'tag-green', suspendido:'tag-gray'};
   return map[(type||'').toLowerCase()] || 'tag-gray';
 }
 
@@ -1501,6 +1519,47 @@ function resetPdfUpload() {
   if (input) input.value = '';
   if (drop) { drop.classList.remove('has-file','dragover'); drop.innerHTML = '<i class="fas fa-cloud-arrow-up"></i><p>Haz clic o arrastra un PDF aqui</p><p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>'; }
   if (progress) progress.style.display = 'none';
+}
+
+function populateRecordDoctorSelector() {
+  const sel = document.getElementById('rec-doc-select'); if (!sel) return;
+  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
+    sel.appendChild(opt);
+  });
+}
+
+function fillRecordDoctor(docId) {
+  if (!docId) return;
+  const d = docs.find(x => x.id === docId); if (!d) return;
+  document.getElementById('rec-doctor').value = d.name;
+}
+
+function noteImgDrop(e) {
+  e.preventDefault();
+  document.getElementById('note-img-drop').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Solo se permiten imagenes', 'warning'); return; }
+  const input = document.getElementById('note-img-input');
+  const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+  noteImgSelected(input);
+}
+
+function noteImgSelected(input) {
+  const file = input.files[0]; if (!file) return;
+  const drop = document.getElementById('note-img-drop');
+  drop.classList.add('has-file');
+  drop.innerHTML = '<i class="fas fa-image" style="color:var(--info);"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size/1024).toFixed(0) + ' KB</p>';
+  // Show preview
+  const preview = document.getElementById('note-img-preview');
+  if (preview) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:8px;margin-top:6px;" alt="preview"/>'; };
+    reader.readAsDataURL(file);
+  }
 }
 
 async function saveRecord() {
@@ -1935,7 +1994,7 @@ function renderNotes() {
   const catColors = {General:'tag-gray', Sintomas:'tag-red', Dieta:'tag-green', Ejercicio:'tag-blue', Estado:'tag-yellow', Emergencia:'tag-red'};
   grid.innerHTML = notes.map(n =>
     '<div class="note-card"><div class="note-header"><div><div class="note-title">' + n.title + '</div><span class="tag ' + (catColors[n.cat]||'tag-gray') + '" style="margin-top:4px;display:inline-block;">' + n.cat + '</span></div><div class="note-date">' + n.date + '</div></div>' +
-    '<div class="note-body">' + n.body + '</div>' +
+    '<div class="note-body">' + n.body + '</div>' + (n.hasImg && n.imgUrl ? '<div style="margin-top:10px;"><img src="' + n.imgUrl + '" alt="' + (n.imgName||'imagen') + '" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="window.open(\'' + n.imgUrl + '\',\'_blank\')"/></div>' : '') +
     '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author||'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>'
   ).join('');
 }
@@ -1944,14 +2003,40 @@ async function saveNote() {
   const title = document.getElementById('note-title').value.trim();
   const body = document.getElementById('note-body').value.trim();
   if (!title || !body) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
-  const n = {id: uid(), title, body, author: document.getElementById('note-author').value.trim() || msUserName || 'Yo', cat: document.getElementById('note-cat').value, date: new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'})};
+  const btn = document.getElementById('note-save-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...'; }
+  const n = {id: uid(), title, body, author: document.getElementById('note-author').value.trim() || msUserName || 'Yo', cat: document.getElementById('note-cat').value, date: new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'}), imgUrl: '', imgName: '', hasImg: false};
+  // Upload image if selected
+  const imgInput = document.getElementById('note-img-input');
+  if (imgInput && imgInput.files && imgInput.files[0]) {
+    try {
+      const file = imgInput.files[0];
+      const safeName = n.id + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const progress = document.getElementById('note-img-progress');
+      const bar = document.getElementById('note-img-bar');
+      if (progress) progress.style.display = 'block';
+      if (bar) bar.style.width = '30%';
+      const result = await odUploadFile(file, 'img_' + safeName);
+      if (bar) bar.style.width = '100%';
+      n.imgUrl = result.url; n.imgName = result.name; n.hasImg = true;
+    } catch(e) {
+      console.warn('Image upload error:', e);
+      toast('Error al subir imagen: ' + e.message, 'warning');
+    }
+  }
   notes.unshift(n);
   await save(KEYS.notes, notes);
-  addActivity('fas fa-notes-medical', '#3a8fc4', 'Nueva nota: ' + title);
+  addActivity('fas fa-notes-medical', '#3a8fc4', 'Nueva nota: ' + title + (n.hasImg ? ' (con imagen)' : ''));
   closeModal('modal-note');
   ['note-title','note-author','note-body'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('note-cat').value = 'General';
-  renderDashboard(); toast('Nota guardada');
+  if (imgInput) imgInput.value = '';
+  const drop = document.getElementById('note-img-drop');
+  if (drop) { drop.classList.remove('has-file'); drop.innerHTML = '<i class="fas fa-image" style="color:var(--ink3);"></i><p>Haz clic o arrastra una imagen aqui</p><p style="font-size:.72rem;margin-top:2px;">JPG, PNG, GIF - Se guarda en OneDrive</p>'; }
+  const progress = document.getElementById('note-img-progress');
+  if (progress) progress.style.display = 'none';
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar'; }
+  renderDashboard(); renderNotes(); toast(n.hasImg ? 'Nota guardada con imagen' : 'Nota guardada');
 }
 
 async function deleteNote(id) {
