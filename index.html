@@ -303,14 +303,28 @@
     <div class="login-title">Salud Elena</div>
     <div class="login-subtitle">Portal familiar de salud · Acceso seguro</div>
     <div id="login-error" class="login-error"></div>
-    <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px;line-height:1.6;">Inicia sesion con tu cuenta de Microsoft para acceder a los datos de salud de Elena guardados en tu OneDrive.</p>
+    <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px;line-height:1.6;">Inicia sesion con tu cuenta de Microsoft para acceder a los datos de salud de Elena guardados en OneDrive.</p>
     <button class="login-btn" id="ms-login-btn" onclick="loginWithMicrosoft()">
       <svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
       Iniciar sesion con Microsoft
     </button>
     <div class="login-info" style="margin-top:16px;">
-      Los datos se guardan en tu <strong>OneDrive/SaludElena/</strong> y son accesibles para todos los familiares que usen la misma cuenta Microsoft.
+      Solo usuarios autorizados pueden acceder. Contacta al administrador si necesitas acceso.
     </div>
+  </div>
+</div>
+
+<!-- ══ ACCESS DENIED SCREEN ══ -->
+<div id="access-denied-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#7f1d1d,#991b1b);z-index:600;display:none;align-items:center;justify-content:center;">
+  <div class="login-card" style="text-align:center;">
+    <div style="font-size:3rem;color:#ef4444;margin-bottom:12px;"><i class="fas fa-shield-halved"></i></div>
+    <div class="login-title" style="color:#1a2e25;">Acceso Denegado</div>
+    <div class="login-subtitle">Tu cuenta no está autorizada para acceder a este portal.</div>
+    <div id="denied-email" style="background:#fdeaea;border-radius:8px;padding:10px 16px;margin:16px 0;font-size:.85rem;color:#991b1b;font-weight:600;"></div>
+    <p style="font-size:.83rem;color:var(--ink2);margin-bottom:20px;">Si crees que esto es un error, contacta al administrador del portal para que agregue tu email a la lista de usuarios autorizados.</p>
+    <button class="login-btn" onclick="logoutAndRetry()" style="background:#991b1b;">
+      <i class="fas fa-right-from-bracket"></i> Cerrar sesión e intentar con otra cuenta
+    </button>
   </div>
 </div>
 
@@ -360,6 +374,8 @@
 <a class="nav-item" onclick="showPage('notes',this)"><i class="fas fa-notes-medical"></i> Notas y Observaciones<span class="nav-badge" id="badge-notes">0</span></a>
 <div class="sidebar-section">Sistema</div>
 <a class="nav-item" onclick="showPage('reminders',this)"><i class="fas fa-bell"></i> Recordatorios<span class="nav-badge" id="badge-reminders" style="background:var(--warning);">0</span></a>
+<div class="sidebar-section">Administracion</div>
+<a class="nav-item" onclick="showPage('settings',this)"><i class="fas fa-gear"></i> Configuracion</a>
 </nav>
 <!-- MAIN CONTENT -->
 <main class="main">
@@ -548,6 +564,48 @@
 </div>
 </div>
 </div>
+  <!-- ══ CONFIGURACION ══ -->
+  <div class="page" id="page-settings">
+    <div class="page-header">
+      <div><div class="page-title"><span>Configuracion</span></div><div class="page-subtitle">Administra el portal y los usuarios autorizados</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex-wrap:wrap;">
+      <!-- Authorized Users -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-shield-halved"></i> Usuarios Autorizados</div>
+        <p style="font-size:.85rem;color:var(--ink2);margin-bottom:16px;">Solo los emails en esta lista pueden acceder al portal con su cuenta Microsoft. Si la lista esta vacia, cualquier cuenta Microsoft puede entrar.</p>
+        <div id="auth-users-list" style="margin-bottom:16px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input class="form-control" id="new-auth-name" placeholder="Nombre (ej: Maria)" style="max-width:140px;"/>
+          <input class="form-control" id="new-auth-email" type="email" placeholder="email@ejemplo.com" style="flex:1;min-width:180px;"/>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addAuthorizedUser()"><i class="fas fa-user-plus"></i> Agregar usuario</button>
+        <hr style="margin:16px 0;border-color:var(--border);"/>
+        <div class="alert-banner alert-info" style="margin-bottom:0;">
+          <i class="fas fa-circle-info alert-banner-icon"></i>
+          <div class="alert-banner-body">
+            <div class="alert-banner-title">Tu email actual</div>
+            <div class="alert-banner-desc" id="current-user-email">Cargando...</div>
+          </div>
+        </div>
+      </div>
+      <!-- Portal Info -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-circle-info"></i> Informacion del Portal</div>
+        <div class="form-group"><label class="form-label">Nombre de la paciente</label><input class="form-control" id="cfg-patname" placeholder="Ej: Elena Garcia"/></div>
+        <div class="form-group"><label class="form-label">Fecha de nacimiento</label><input class="form-control" type="date" id="cfg-dob"/></div>
+        <div class="form-group"><label class="form-label">Tipo de sangre</label>
+          <select class="form-control" id="cfg-blood"><option value="">Seleccionar...</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Alergias conocidas</label><textarea class="form-control" id="cfg-allergies" rows="2" placeholder="Ej: Penicilina, Aspirina..."></textarea></div>
+        <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Guardar</button>
+        <hr style="margin:16px 0;border-color:var(--border);"/>
+        <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-download"></i> Exportar Datos</div>
+        <button class="btn btn-outline" onclick="exportData()"><i class="fas fa-file-export"></i> Exportar JSON</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 <!-- ══ MODALS ══ -->
 <!-- Modal: Registro -->
@@ -818,6 +876,38 @@
 //  SALUD ELENA - OneDrive/Microsoft Graph
 //  No Firebase. All data in OneDrive JSON files.
 // ══════════════════════════════════════════
+
+function showLoginError(msg) {
+  const e = document.getElementById('login-error');
+  if (e) { e.textContent = msg; e.style.display = 'block'; }
+}
+
+// ══════════════════════════════════════════
+//  AUTHORIZED USERS - Dynamic, managed from Settings page
+// ══════════════════════════════════════════
+// Authorized emails are stored in OneDrive/SaludElena/data/authorized.json
+// and cached in localStorage. Managed from the Settings page.
+
+function getAuthorizedEmails() {
+  try { return JSON.parse(localStorage.getItem('se_authorized_emails') || '[]'); } catch { return []; }
+}
+
+function saveAuthorizedEmails(emails) {
+  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
+  // Sync to OneDrive
+  odWriteJson('authorized.json', emails).catch(e => console.warn('Auth sync error:', e));
+}
+
+async function loadAuthorizedEmails() {
+  try {
+    const data = await odReadJson('authorized.json');
+    if (data && Array.isArray(data)) {
+      localStorage.setItem('se_authorized_emails', JSON.stringify(data));
+      return data;
+    }
+  } catch(e) {}
+  return getAuthorizedEmails();
+}
 
 // ── Microsoft OAuth2 PKCE Config ──
 const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c';
@@ -1092,7 +1182,7 @@ let isLoggedIn = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
 
 function logoutFamily() {
   if (!confirm('Cerrar sesion? Tendras que iniciar sesion con Microsoft nuevamente.')) return;
-  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_pkce_verifier','ms_oauth_state'].forEach(k => localStorage.removeItem(k));
+  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_user_email','ms_pkce_verifier','ms_oauth_state'].forEach(k => localStorage.removeItem(k));
   // Clear data cache
   Object.values(KEYS).forEach(k => localStorage.removeItem(k));
   location.reload();
@@ -1124,14 +1214,50 @@ async function enterPortal() {
   setSyncStatus('synced');
 }
 
+function isAuthorized(email, emailList) {
+  const list = emailList || getAuthorizedEmails();
+  if (!list || list.length === 0) return true; // Open access if list is empty
+  return list.some(e => (e.email||e).toLowerCase().trim() === (email||'').toLowerCase().trim());
+}
+
+function showAccessDenied(email) {
+  document.getElementById('login-screen').style.display = 'none';
+  const denied = document.getElementById('access-denied-screen');
+  denied.style.display = 'flex';
+  const emailEl = document.getElementById('denied-email');
+  if (emailEl) emailEl.textContent = 'Cuenta: ' + (email || 'desconocida');
+}
+
+function logoutAndRetry() {
+  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_user_email'].forEach(k => localStorage.removeItem(k));
+  document.getElementById('access-denied-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  const btn = document.getElementById('ms-login-btn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Iniciar sesion con Microsoft'; }
+}
+
 async function loginWithMicrosoft() {
   const btn = document.getElementById('ms-login-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
   try {
-    await ensureMsToken();
+    const token = await ensureMsToken();
+    // Get user email for authorization check
+    const userResp = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', {
+      headers: {'Authorization': 'Bearer ' + token}
+    });
+    const user = await userResp.json();
+    const email = user.mail || user.userPrincipalName || '';
+    localStorage.setItem('ms_user_email', email);
+    // Load and check authorization
+    await loadAuthorizedEmails();
+    const authorizedEmails = getAuthorizedEmails();
+    if (!isAuthorized(email, authorizedEmails)) {
+      showAccessDenied(email);
+      return;
+    }
     await enterPortal();
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-microsoft"></i> Iniciar sesion con Microsoft'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Iniciar sesion con Microsoft'; }
     showLoginError('Error al conectar: ' + e.message);
   }
 }
@@ -1151,6 +1277,7 @@ function showPage(id, el) {
   if (id === 'doctors') renderDocs();
   if (id === 'notes') renderNotes();
   if (id === 'reminders') renderRemindersPage();
+  if (id === 'settings') renderSettingsPage();
   if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
 }
 
@@ -2240,6 +2367,84 @@ function exportData() {
 }
 
 // ══════════════════════════════════════════
+//  SETTINGS PAGE
+// ══════════════════════════════════════════
+function renderSettingsPage() {
+  // Show current user email
+  const emailEl = document.getElementById('current-user-email');
+  if (emailEl) emailEl.textContent = localStorage.getItem('ms_user_email') || 'No disponible';
+  // Load authorized users
+  renderAuthUsersList();
+  // Load patient settings
+  const s = settings || {};
+  const patname = document.getElementById('cfg-patname');
+  const dob = document.getElementById('cfg-dob');
+  const blood = document.getElementById('cfg-blood');
+  const allergies = document.getElementById('cfg-allergies');
+  if (patname) patname.value = s.patname || '';
+  if (dob) dob.value = s.dob || '';
+  if (blood) blood.value = s.blood || '';
+  if (allergies) allergies.value = s.allergies || '';
+}
+
+function renderAuthUsersList() {
+  const list = document.getElementById('auth-users-list');
+  if (!list) return;
+  const emails = getAuthorizedEmails();
+  if (!emails.length) {
+    list.innerHTML = '<div style="font-size:.83rem;color:var(--ink3);padding:10px;background:var(--accent);border-radius:8px;margin-bottom:8px;"><i class="fas fa-unlock" style="margin-right:6px;"></i>Lista vacia - cualquier cuenta Microsoft puede acceder</div>';
+    return;
+  }
+  list.innerHTML = emails.map((u, i) => {
+    const email = u.email || u;
+    const name = u.name || '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+      '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-light);">' + (name ? name.slice(0,2).toUpperCase() : email.slice(0,2).toUpperCase()) + '</div>' +
+      '<div style="flex:1;"><div style="font-size:.88rem;font-weight:600;color:var(--ink);">' + (name || email) + '</div>' +
+      (name ? '<div style="font-size:.75rem;color:var(--ink3);">' + email + '</div>' : '') + '</div>' +
+      '<button class="btn btn-danger btn-sm" onclick="removeAuthorizedUser(' + i + ')"><i class="fas fa-xmark"></i></button>' +
+      '</div>';
+  }).join('');
+}
+
+function addAuthorizedUser() {
+  const nameEl = document.getElementById('new-auth-name');
+  const emailEl = document.getElementById('new-auth-email');
+  const name = (nameEl ? nameEl.value.trim() : '');
+  const email = (emailEl ? emailEl.value.trim().toLowerCase() : '');
+  if (!email) { toast('Por favor ingresa un email', 'warning'); return; }
+  if (!email.includes('@')) { toast('Email invalido', 'warning'); return; }
+  const emails = getAuthorizedEmails();
+  if (emails.some(u => (u.email||u).toLowerCase() === email)) { toast('Este email ya esta en la lista', 'warning'); return; }
+  emails.push(name ? {name, email} : email);
+  saveAuthorizedEmails(emails);
+  if (nameEl) nameEl.value = '';
+  if (emailEl) emailEl.value = '';
+  renderAuthUsersList();
+  toast((name || email) + ' agregado a usuarios autorizados');
+}
+
+function removeAuthorizedUser(index) {
+  const emails = getAuthorizedEmails();
+  const user = emails[index];
+  const label = (user.name || user.email || user);
+  if (!confirm('Remover a ' + label + ' de usuarios autorizados?')) return;
+  emails.splice(index, 1);
+  saveAuthorizedEmails(emails);
+  renderAuthUsersList();
+  toast(label + ' removido de usuarios autorizados');
+}
+
+async function saveSettings() {
+  settings.patname = (document.getElementById('cfg-patname') || {}).value || '';
+  settings.dob = (document.getElementById('cfg-dob') || {}).value || '';
+  settings.blood = (document.getElementById('cfg-blood') || {}).value || '';
+  settings.allergies = (document.getElementById('cfg-allergies') || {}).value || '';
+  await saveObj(KEYS.settings, settings);
+  toast('Configuracion guardada');
+}
+
+// ══════════════════════════════════════════
 //  POLLING ENGINE
 // ══════════════════════════════════════════
 function runReminderEngine() {
@@ -2266,12 +2471,17 @@ if ('caches' in window) {
 (function init() {
   const hasToken = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
   if (hasToken) {
+    const savedEmail = localStorage.getItem('ms_user_email') || '';
+    const authorizedEmails = getAuthorizedEmails();
+    if (authorizedEmails.length > 0 && !isAuthorized(savedEmail, authorizedEmails)) {
+      showAccessDenied(savedEmail);
+      return;
+    }
     document.getElementById('login-screen').style.display = 'none';
     msUserName = localStorage.getItem('ms_user_name') || 'Usuario';
     document.getElementById('user-name').textContent = msUserName;
     document.getElementById('user-avatar').textContent = msUserName.slice(0,2).toUpperCase();
     updateTopbarFamilyCode();
-    // Load fresh data from OneDrive
     loadAllFromOneDrive().then(() => {
       renderDashboard();
       updateBellBadge();
