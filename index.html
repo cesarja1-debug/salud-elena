@@ -804,9 +804,23 @@
   <i class="fas fa-file-pdf" style="color:#e05252;margin-right:6px;"></i><span id="edit-rec-pdf-name"></span>
   <span style="color:var(--ink3);margin-left:8px;">(El PDF existente se mantiene)</span>
 </div>
+<div class="form-group" id="edit-rec-pdf-section">
+  <label class="form-label"><i class="fas fa-file-pdf" style="color:var(--danger);margin-right:5px;"></i>Adjuntar / Reemplazar PDF (opcional)</label>
+  <div id="edit-rec-pdf-current" style="display:none;background:var(--accent);border-radius:var(--radius-sm);padding:8px 12px;font-size:.82rem;color:var(--ink2);margin-bottom:8px;">
+    <i class="fas fa-file-pdf" style="color:#e05252;margin-right:6px;"></i><span id="edit-rec-pdf-name-show"></span>
+    <span style="color:var(--ink3);margin-left:8px;">(PDF existente - se mantiene si no seleccionas uno nuevo)</span>
+  </div>
+  <div class="pdf-upload-area" id="edit-rec-pdf-drop" onclick="document.getElementById('edit-rec-pdf-input').click()" ondragover="pdfDragOver(event,'edit-rec-pdf-drop')" ondragleave="pdfDragLeave('edit-rec-pdf-drop')" ondrop="pdfDrop(event,'edit-rec-pdf-input','edit-rec-pdf-drop')" style="border-color:var(--info);">
+    <i class="fas fa-cloud-arrow-up" style="color:var(--ink3);"></i>
+    <p>Haz clic o arrastra un PDF aqui para adjuntar</p>
+    <p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>
+  </div>
+  <input type="file" id="edit-rec-pdf-input" accept=".pdf,application/pdf" style="display:none;" onchange="pdfFileSelected(this,'edit-rec-pdf-drop')"/>
+  <div class="pdf-progress" id="edit-rec-pdf-progress"><div class="pdf-progress-bar" id="edit-rec-pdf-bar"></div></div>
+</div>
 <div class="form-actions">
   <button class="btn btn-outline" onclick="closeModal('modal-edit-record')">Cancelar</button>
-  <button class="btn btn-primary" onclick="saveEditRecord()"><i class="fas fa-save"></i> Guardar Cambios</button>
+  <button class="btn btn-primary" id="edit-rec-save-btn" onclick="saveEditRecord()"><i class="fas fa-save"></i> Guardar Cambios</button>
 </div>
 </div>
 </div>
@@ -869,7 +883,7 @@ const OD_PDFS = OD_FOLDER + '/PDFs';
 
 // Token embebido por el admin (evita que la familia tenga que conectar OneDrive)
 // Despues de conectar OneDrive, usa "Compartir acceso" para obtener este token
-const EMBEDDED_REFRESH_TOKEN = '1.AW8BlGttgGHipkiNmKlZ0mgomRD9Ho9cZsNGhbP28KHytwwAAE1vAQ.BQABAwEAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cwIAAAAAAP2rkBW2CF3DRj5y22IwrKcbHVZ9jniqwELnQJapKoD7G-i1qU9VZ7libQHOMdY4nTsTQRw12RlYggRakkUjazoDw7yPdBJM5HxPMoXnh2mmnTMC4PmX6MezyEaXTOs9LyslCUhgtS3KV50Iyya8H3UQERswP5rWHUO6f2hLT11bWJr6CGS0woSnK0C2suAo3RV5k1vuF5587feCwlIbCFMhhTwITPddDjq8IQe08MBr_rnuA3lffaz4NKsCjdFBmrJ7kzhUt710OZ8vJGemYKxWz_cjrzJwuHhz46n6J2u2RgB66Qzuiv9pkXEN3QhURHA-tihS4vUtBk4CDMnU5JlZ7H1srA1XyJcmdooIOkCJL16dVpOLv9z1b4E3p6X412LiXBw7FkQfMZFSEiGFg92JV2VSXh08n5yTyuFXQfHlnnuxv2MifOLn4rifQrKMcPWFQ8jaHnnCJdi7TaNHC0mkYajvNJxgYw2FyGnDyFtHfRnE5Ys_ZxSwp5_NTw5avcfnQ_JKzOgdNSJJ-zYkZ1C4rTS7clDb2Xs0gDzA1onzKUJ3ODE_4WkZ_cAeZMMjZVcPbjUOHmmSoY33iHwuVFQpksRP8DO4-DgCuVEXwdMGLeJlNI84ZiRhnlCxGs5dDU47V8QMH9MLpS1i9dpFYkUrALPA4sVeg9kLVl9XeIpXrw0XOHjDxb-Ojmo37_nTDSMpZ7z1nVr5ClRPCwXre3UcWUCvjfLEm7XwJvWtac53anQlyGgfjOzreElQVgHLCyi3OMyONyatAOc8i4vt05UDnz4YWI3deNJqD7dVg6RL17VpaTeJnuaRjDl8nNOUy2H4q_90-aIBatm7GwxHC9FTA_wfjGZKnuS46s99VioYMCgO7XQiZnAWsB9Nuj0mftE8FZVCboxftGHyWep61bPYSjtj8K6zl_CT4T-WARoJhUA2qK6JZiSLsjlSbnpb0OPiuyGnjmWa9JDIInvMPOnP-5wbEp8VicwJpfZyuuLe-6Sos1ChYmryE6HauTtucs9V-c8NhCfasnu8kEuBNLeoVBdP-FU5e7Mq96kS0_J-T33qQ5C15Ic4OYIc4kR9wNdT30HdWinW55Qj04STCf45dP6WjJNBfTMaDP0Io0d2pSSBLkH16p4sFvc0cMvNc2QoD633Xt1ZAkI46_-OcR-yFXcYZFtgkHCNhh40X1yLuPtLEIc1eBkpjzEgCoUcd_4TNjJMTIpAoMF3hy6Rjip4SgO6HOLByuWeEzrrVnZAHCul63mVFs4NQSmzeS0Gnt5byi12ffAJ9I9ESJBP3rFcJjHQdCzcMuf9pJGcA4RqQryrw9Bt2XBv8fgGnEFkr180DU15eazMAa-Tjxm8vP3Tjawt-jTJOrMzZU4bWInMb2kWSY3YFFDyrBY0xFTnN2WDohi1'; // <- Admin: pega aqui el refresh token
+const EMBEDDED_REFRESH_TOKEN = ''; // <- Admin: pega aqui el refresh token
 
 // ── Miembros ──
 function getMembers() {
@@ -1756,9 +1770,22 @@ function openEditRecord(id) {
   document.getElementById('edit-rec-doctor').value = r.doctor || '';
   document.getElementById('edit-rec-desc').value = r.desc || '';
   document.getElementById('edit-rec-notes').value = r.notes || '';
+  // Show existing PDF info
   const pdfInfo = document.getElementById('edit-rec-pdf-info');
   const pdfName = document.getElementById('edit-rec-pdf-name');
-  if (r.hasPdf && r.pdfName) { pdfInfo.style.display = 'block'; pdfName.textContent = r.pdfName; } else { pdfInfo.style.display = 'none'; }
+  if (r.hasPdf && r.pdfName) { if(pdfInfo) { pdfInfo.style.display = 'block'; } if(pdfName) pdfName.textContent = r.pdfName; } else { if(pdfInfo) pdfInfo.style.display = 'none'; }
+  // Show current PDF in edit modal
+  const curPdf = document.getElementById('edit-rec-pdf-current');
+  const curPdfName = document.getElementById('edit-rec-pdf-name-show');
+  if (r.hasPdf && r.pdfName) { if(curPdf) curPdf.style.display = 'block'; if(curPdfName) curPdfName.textContent = r.pdfName; }
+  else { if(curPdf) curPdf.style.display = 'none'; }
+  // Reset upload area
+  const drop = document.getElementById('edit-rec-pdf-drop');
+  const input = document.getElementById('edit-rec-pdf-input');
+  const progress = document.getElementById('edit-rec-pdf-progress');
+  if (drop) { drop.classList.remove('has-file'); drop.innerHTML = '<i class="fas fa-cloud-arrow-up" style="color:var(--ink3);"></i><p>Haz clic o arrastra un PDF aqui para adjuntar</p><p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>'; }
+  if (input) input.value = '';
+  if (progress) progress.style.display = 'none';
   openModal('modal-edit-record');
 }
 
@@ -1769,14 +1796,42 @@ function saveEditRecord() {
   const type = document.getElementById('edit-rec-type').value;
   const desc = document.getElementById('edit-rec-desc').value.trim();
   if (!date || !type || !desc) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
+  const btn = document.getElementById('edit-rec-save-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...'; }
   r.date = date; r.type = type; r.desc = desc;
   r.doctor = document.getElementById('edit-rec-doctor').value.trim();
   r.notes = document.getElementById('edit-rec-notes').value.trim();
-  save(KEYS.records, records);
-  addActivity('fas fa-pen', '#3a8fc4', 'Registro editado: ' + desc);
-  closeModal('modal-edit-record');
-  renderRecords(); renderDashboard();
-  toast('Registro actualizado');
+  // Handle PDF upload if new file selected
+  const pdfInput = document.getElementById('edit-rec-pdf-input');
+  const pdfFile = pdfInput && pdfInput.files && pdfInput.files[0] ? pdfInput.files[0] : null;
+  const safetyTimer = setTimeout(function() {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios'; }
+    toast('Tiempo de espera agotado. Intenta de nuevo.', 'warning');
+  }, 25000);
+  const uploadPromise = pdfFile ? (
+    getValidOdToken().then(function(token) {
+      const safeName = r.id + '_' + pdfFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const progress = document.getElementById('edit-rec-pdf-progress');
+      const bar = document.getElementById('edit-rec-pdf-bar');
+      if (progress) progress.style.display = 'block';
+      if (bar) bar.style.width = '30%';
+      return (token ? odUploadFile(pdfFile, safeName) : uploadPdfLocal(pdfFile, r.id)).then(function(result) {
+        if (bar) bar.style.width = '100%';
+        r.pdfName = result.name; r.pdfUrl = result.url; r.driveItemId = result.driveItemId; r.hasPdf = true;
+      });
+    })
+  ) : Promise.resolve();
+  uploadPromise.catch(function(e) {
+    toast('Error al subir PDF: ' + e.message + ' - Guardando sin PDF.', 'warning');
+  }).then(function() {
+    clearTimeout(safetyTimer);
+    save(KEYS.records, records);
+    addActivity('fas fa-pen', '#3a8fc4', 'Registro editado: ' + desc + (r.hasPdf ? ' (con PDF)' : ''));
+    closeModal('modal-edit-record');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios'; }
+    renderRecords(); renderDashboard();
+    toast(r.hasPdf ? 'Registro actualizado con PDF' : 'Registro actualizado');
+  });
 }
 
 let _deleteRecordId = null;
