@@ -315,7 +315,7 @@
 </div>
 
 <!-- ══ ACCESS DENIED SCREEN ══ -->
-<div id="access-denied-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#7f1d1d,#991b1b);z-index:600;display:none;align-items:center;justify-content:center;">
+<div id="access-denied-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#7f1d1d,#991b1b);z-index:600;align-items:center;justify-content:center;">
   <div class="login-card" style="text-align:center;">
     <div style="font-size:3rem;color:#ef4444;margin-bottom:12px;"><i class="fas fa-shield-halved"></i></div>
     <div class="login-title" style="color:#1a2e25;">Acceso Denegado</div>
@@ -1289,7 +1289,7 @@ function isAuthorized(email, emailList) {
 function showAccessDenied(email) {
   document.getElementById('login-screen').style.display = 'none';
   const denied = document.getElementById('access-denied-screen');
-  denied.style.display = 'flex';
+  if (denied) { denied.style.display = 'flex'; }
   const emailEl = document.getElementById('denied-email');
   if (emailEl) emailEl.textContent = 'Cuenta: ' + (email || 'desconocida');
 }
@@ -2550,12 +2550,17 @@ if ('caches' in window) {
   });
 }
 
-(function init() {
+(async function init() {
   const hasToken = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
   if (hasToken) {
     const savedEmail = localStorage.getItem('ms_user_email') || '';
-    const authorizedEmails = getAuthorizedEmails();
-    if (authorizedEmails.length > 0 && !isAuthorized(savedEmail, authorizedEmails)) {
+    // Load authorized emails from OneDrive (async, use cached if fails)
+    let authorizedEmails = getAuthorizedEmails();
+    try {
+      const fresh = await loadAuthorizedEmails();
+      if (fresh && Array.isArray(fresh)) authorizedEmails = fresh;
+    } catch(e) { console.warn('Could not load auth list:', e); }
+    if (!isAuthorized(savedEmail, authorizedEmails)) {
       showAccessDenied(savedEmail);
       return;
     }
