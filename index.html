@@ -558,8 +558,11 @@
         <button class="btn btn-outline btn-sm" onclick="manualSync()" style="width:100%;margin-bottom:6px;">
           <i class="fas fa-rotate"></i> Cargar datos desde OneDrive
         </button>
-        <button class="btn btn-outline btn-sm" onclick="pushLocalToOneDrive()" style="width:100%;color:var(--info);border-color:var(--info);">
+        <button class="btn btn-outline btn-sm" onclick="pushLocalToOneDrive()" style="width:100%;color:var(--info);border-color:var(--info);margin-bottom:6px;">
           <i class="fas fa-cloud-arrow-up"></i> Subir datos locales a OneDrive
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="embedTokenInPortal()" style="width:100%;color:#8b5cf6;border-color:#8b5cf6;">
+          <i class="fas fa-key"></i> Compartir acceso con familia (admin)
         </button>
         <div id="od-connect-result" style="font-size:.78rem;color:var(--ink2);margin-top:8px;line-height:1.5;"></div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
@@ -889,8 +892,11 @@ function populateMemberSelect() {
   if (!sel) return;
   const members = getMembers();
   const saved = localStorage.getItem('se_last_member') || '';
-  sel.innerHTML = '<option value="">— Selecciona tu nombre —</option>' +
-    members.map(m => '<option value="' + m + '"' + (m === saved ? ' selected' : '') + '>' + m + '</option>').join('');
+  let opts = '<option value="">— Selecciona tu nombre —</option>';
+  members.forEach(m => {
+    opts += '<option value="' + m + '"' + (m === saved ? ' selected' : '') + '>' + m + '</option>';
+  });
+  sel.innerHTML = opts;
 }
 
 // ── Logo triple-click to show admin setup ──
@@ -933,8 +939,12 @@ function showLoginError(msg) {
 
 // ── OneDrive OAuth for admin ──
 // Microsoft OAuth for personal accounts
-// Using Microsoft's public client ID for personal OneDrive access
 const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c'; // Salud Elena app - Cesarja1 tenant
+
+// ── Embedded refresh token (set by admin, works on all devices) ──
+// After admin connects OneDrive, click "Compartir acceso con familia"
+// to get instructions on embedding the token here.
+const EMBEDDED_REFRESH_TOKEN = ''; // ← Admin fills this after connecting
 // Redirect URI - must match exactly what's registered in Azure
 // Registered: https://cesarja1-debug.github.io/salud-elena/
 const MS_REDIRECT = window.location.origin + window.location.pathname.replace(/\/?$/, '/');
@@ -944,7 +954,9 @@ function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
 }
 
-async function genPKCE() {
+void 0;
+
+const genPKCE = async function() {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   return {verifier, challenge};
@@ -956,9 +968,81 @@ function setOdToken(t, exp) {
   localStorage.setItem('se_od_token', t);
   localStorage.setItem('se_od_token_exp', Date.now() + exp * 1000);
 }
-function odTokenValid() { return getOdToken() && Date.now() < getOdTokenExp() - 60000; }
 
-async function refreshOdToken() {
+// Show admin how to embed token for all devices
+function embedTokenInPortal() {
+  const rt = localStorage.getItem('se_od_refresh');
+  if (!rt) { toast('Primero conecta OneDrive con tu cuenta de administrador.', 'warning'); return; }
+  const result = document.getElementById('od-connect-result');
+  if (result) {
+    result.style.cssText = 'background:#f3e8ff;border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-top:8px;font-size:.78rem;';
+    result.innerHTML = '';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:700;color:#6d28d9;margin-bottom:8px;';
+    title.textContent = 'Token para compartir con familia';
+    const desc = document.createElement('div');
+    desc.style.cssText = 'color:var(--ink2);margin-bottom:8px;';
+    desc.textContent = 'Copia este token y pegalo en EMBEDDED_REFRESH_TOKEN en el index.html';
+    const ta = document.createElement('textarea');
+    ta.style.cssText = 'width:100%;height:70px;font-size:.65rem;font-family:monospace;border:1px solid #8b5cf6;border-radius:4px;padding:6px;resize:none;';
+    ta.readOnly = true;
+    ta.value = rt;
+    ta.onclick = function() { this.select(); };
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-primary btn-sm';
+    copyBtn.style.cssText = 'margin-top:8px;background:#8b5cf6;border:none;';
+    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar token';
+    copyBtn.onclick = copyEmbedToken;
+    result.appendChild(title);
+    result.appendChild(desc);
+    result.appendChild(ta);
+    result.appendChild(copyBtn);
+  }
+}
+function copyEmbedToken() {
+  const rt = localStorage.getItem('se_od_refresh');
+  if (rt) {
+    navigator.clipboard.writeText(rt).then(() => toast('Token copiado! Pegalo en EMBEDDED_REFRESH_TOKEN en el index.html'));
+  }
+}
+
+// Save refresh token to OneDrive so all devices can use it
+async function saveSharedToken(refreshToken) {
+  try {
+    const tokenData = {
+      refresh_token: refreshToken,
+      saved_at: new Date().toISOString(),
+      saved_by: localStorage.getItem('se_user_name') || 'admin'
+    };
+    // Use current access token to save the shared token file
+    const token = getOdToken();
+    if (!token) return;
+    await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/auth.json:/content', {
+      method: 'PUT',
+      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: JSON.stringify(tokenData)
+    });
+    console.log('Shared token saved to OneDrive');
+  } catch(e) { console.warn('Could not save shared token:', e); }
+}
+
+// Load shared token from OneDrive (for devices without a local token)
+async function loadSharedToken() {
+  try {
+    // Try to get token using a temporary approach - fetch the auth.json
+    // We need a token to read OneDrive, but we don't have one yet
+    // Solution: use the refresh token if we have it locally
+    const localRefresh = localStorage.getItem('se_od_refresh');
+    if (localRefresh) return false; // Already have local token, no need to load shared
+    
+    // If no local token, we can't load from OneDrive without auth
+    // The admin must reconnect - but we show a clear message
+    return false;
+  } catch(e) { return false; }
+}
+function odTokenValid() { return getOdToken() && Date.now() < getOdTokenExp() - 60000; };
+
+const refreshOdToken = async function() {
   const rt = localStorage.getItem('se_od_refresh');
   if (!rt) return false;
   try {
@@ -975,15 +1059,23 @@ async function refreshOdToken() {
     }
   } catch(e) { console.warn('Token refresh error:', e); }
   return false;
-}
+};
 
-async function getValidOdToken() {
+const getValidOdToken = async function() {
   if (odTokenValid()) return getOdToken();
   if (await refreshOdToken()) return getOdToken();
+  // Try embedded refresh token (set by admin for all devices)
+  if (EMBEDDED_REFRESH_TOKEN && EMBEDDED_REFRESH_TOKEN !== '') {
+    const saved = localStorage.getItem('se_od_refresh');
+    if (!saved || saved !== EMBEDDED_REFRESH_TOKEN) {
+      localStorage.setItem('se_od_refresh', EMBEDDED_REFRESH_TOKEN);
+    }
+    if (await refreshOdToken()) return getOdToken();
+  }
   return null; // No valid token - offline mode
-}
+};
 
-async function adminConnectOneDrive() {
+const adminConnectOneDrive = async function() {
   const btn = document.getElementById('admin-connect-btn');
   const status = document.getElementById('admin-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
@@ -1054,9 +1146,9 @@ async function odRead(filename) {
     if (!r.ok) return null;
     return await r.json();
   } catch(e) { return null; }
-}
+};
 
-async function odWrite(filename, data) {
+const odWrite = async function(filename, data) {
   const token = await getValidOdToken();
   if (!token) return; // Offline - data stays in localStorage
   try {
@@ -1068,9 +1160,9 @@ async function odWrite(filename, data) {
     });
     setSyncStatus('synced');
   } catch(e) { setSyncStatus('offline'); }
-}
+};
 
-async function odUploadFile(file, safeName) {
+const odUploadFile = async function(file, safeName) {
   const token = await getValidOdToken();
   if (!token) throw new Error('OneDrive no conectado. El admin debe conectar OneDrive primero.');
   const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_PDFS_PATH + '/' + safeName + ':/content', {
@@ -1091,9 +1183,9 @@ async function odUploadFile(file, safeName) {
   } catch(e) {
     return {url: data.webUrl, name: file.name, driveItemId: data.id};
   }
-}
+};
 
-async function listOneDriveFiles() {
+const listOneDriveFiles = async function() {
   const token = await getValidOdToken();
   if (!token) return [];
   try {
@@ -1110,9 +1202,9 @@ async function listOneDriveFiles() {
     console.log('OneDrive SaludElena/data/ files:', files.map(f => f.name + ' (' + (f.size||0) + ' bytes)'));
     return files.map(f => f.name);
   } catch(e) { console.warn('listOneDriveFiles exception:', e); return []; }
-}
+};
 
-async function loadFromOneDrive() {
+const loadFromOneDrive = async function() {
   // First list what files exist
   const existingFiles = await listOneDriveFiles();
   console.log('Files in SaludElena:', existingFiles);
@@ -1207,9 +1299,9 @@ function showFamilyCode() {
 function updateTopbarFamilyCode() {
   const el = document.getElementById('topbar-family-code');
   if (el) el.textContent = msUserName || '';
-}
+};
 
-async function pushLocalToOneDrive() {
+const pushLocalToOneDrive = async function() {
   const result = document.getElementById('od-connect-result');
   if (!await getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
     toast('Conecta OneDrive primero', 'warning'); return;
@@ -1241,9 +1333,9 @@ async function pushLocalToOneDrive() {
   setSyncStatus('synced');
   if (result) result.textContent = '✅ ' + uploaded + ' archivos subidos a OneDrive/SaludElena/';
   toast(uploaded + ' archivos subidos a OneDrive exitosamente');
-}
+};
 
-async function manualSync() {
+const manualSync = async function() {
   if (!getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
     toast('OneDrive no conectado. Usa el admin setup para conectar.', 'warning');
     return;
@@ -1294,8 +1386,8 @@ async function save(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
   odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
-}
-async function saveObj(key, data) {
+};
+const saveObj = async function(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
   odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
@@ -1723,9 +1815,9 @@ async function uploadPdfLocal(file, recordId) {
   }
   if (bar) bar.style.width = '100%';
   return {url: 'local:' + recordId, name: file.name, driveItemId: recordId};
-}
+};
 
-async function uploadImgLocal(file, noteId) {
+const uploadImgLocal = async function(file, noteId) {
   if (file.size > 1 * 1024 * 1024) throw new Error('La imagen supera 1MB. Reduce el tamano de la imagen primero.');
   const base64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1796,9 +1888,9 @@ function noteImgSelected(input) {
     reader.onload = e => { preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:8px;margin-top:6px;" alt="preview"/>'; };
     reader.readAsDataURL(file);
   }
-}
+};
 
-async function saveRecord() {
+const saveRecord = async function() {
   const date = document.getElementById('rec-date').value;
   const type = document.getElementById('rec-type').value;
   const desc = document.getElementById('rec-desc').value.trim();
@@ -1857,9 +1949,9 @@ function openEditRecord(id) {
   if (r.hasPdf && r.pdfName) { pdfInfo.style.display = 'block'; pdfName.textContent = r.pdfName; }
   else { pdfInfo.style.display = 'none'; }
   openModal('modal-edit-record');
-}
+};
 
-async function saveEditRecord() {
+const saveEditRecord = async function() {
   const id = document.getElementById('edit-rec-id').value;
   const r = records.find(x => x.id === id); if (!r) return;
   const date = document.getElementById('edit-rec-date').value;
@@ -1894,9 +1986,9 @@ function deleteRecord(id) {
 function checkDeleteConfirm() {
   const val = document.getElementById('delete-rec-confirm-input').value.trim().toUpperCase();
   document.getElementById('delete-rec-confirm-btn').disabled = (val !== 'ELIMINAR');
-}
+};
 
-async function confirmDeleteRecord() {
+const confirmDeleteRecord = async function() {
   const id = _deleteRecordId; if (!id) return;
   const r = records.find(x => x.id === id);
   if (r && r.hasPdf && r.driveItemId) { localStorage.removeItem('se_pdf_' + r.id); }
@@ -1966,9 +2058,9 @@ function checkNewDoctor() {
   if (!name) { hint.style.display = 'none'; return; }
   const exists = docs.some(d => d.name.toLowerCase() === name.toLowerCase());
   hint.style.display = exists ? 'none' : 'block';
-}
+};
 
-async function saveAppt() {
+const saveAppt = async function() {
   const date = document.getElementById('appt-date').value;
   const doctor = document.getElementById('appt-doctor').value.trim();
   const reason = document.getElementById('appt-reason').value.trim();
@@ -2005,9 +2097,9 @@ function openCompleteAppt(id) {
   document.getElementById('complete-appt-comments').value = '';
   document.getElementById('complete-appt-record').value = 'yes';
   openModal('modal-complete-appt');
-}
+};
 
-async function confirmCompleteAppt() {
+const confirmCompleteAppt = async function() {
   const a = appts.find(x => x.id === _completeApptId); if (!a) return;
   const comments = document.getElementById('complete-appt-comments').value.trim();
   const createRecord = document.getElementById('complete-appt-record').value === 'yes';
@@ -2039,9 +2131,9 @@ function openEditAppt(id) {
   document.getElementById('edit-appt-notes').value = a.notes || '';
   document.getElementById('edit-appt-comments').value = a.comments || '';
   openModal('modal-edit-appt');
-}
+};
 
-async function saveEditAppt() {
+const saveEditAppt = async function() {
   const id = document.getElementById('edit-appt-id').value;
   const a = appts.find(x => x.id === id); if (!a) return;
   const prevStatus = a.status;
@@ -2060,17 +2152,17 @@ async function saveEditAppt() {
   closeModal('modal-edit-appt');
   renderAppts(); renderDashboard();
   toast('Cita actualizada');
-}
+};
 
-async function deleteAppt(id) {
+const deleteAppt = async function(id) {
   if (!confirm('Eliminar esta cita?')) return;
   appts = appts.filter(a => a.id !== id);
   await save(KEYS.appts, appts);
   renderAppts(); renderDashboard();
   toast('Cita eliminada');
-}
+};
 
-async function completeAppt(id) {
+const completeAppt = async function(id) {
   const a = appts.find(x => x.id === id); if (!a) return;
   a.status = 'completada';
   await save(KEYS.appts, appts);
@@ -2132,9 +2224,9 @@ function fillMedDoctor(docId) {
   if (!docId) return;
   const d = docs.find(x => x.id === docId); if (!d) return;
   document.getElementById('med-doctor').value = d.name;
-}
+};
 
-async function saveMed() {
+const saveMed = async function() {
   const name = document.getElementById('med-name').value.trim();
   const dose = document.getElementById('med-dose').value.trim();
   if (!name || !dose) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
@@ -2146,17 +2238,17 @@ async function saveMed() {
   ['med-name','med-dose','med-doctor','med-notes','med-start'].forEach(id => document.getElementById(id).value = '');
   const medSel = document.getElementById('med-doc-select'); if (medSel) medSel.value = '';
   renderDashboard(); toast('Medicamento guardado');
-}
+};
 
-async function toggleMed(id) {
+const toggleMed = async function(id) {
   const m = meds.find(x => x.id === id); if (!m) return;
   m.status = m.status === 'activo' ? 'suspendido' : 'activo';
   await save(KEYS.meds, meds);
   renderMeds(); renderDashboard();
   toast('Medicamento ' + m.status);
-}
+};
 
-async function deleteMed(id) {
+const deleteMed = async function(id) {
   if (!confirm('Eliminar este medicamento?')) return;
   meds = meds.filter(m => m.id !== id);
   await save(KEYS.meds, meds);
@@ -2211,9 +2303,9 @@ function openEditDoc(id) {
   document.getElementById('doc-address').value = d.address || '';
   document.getElementById('doc-notes').value = d.notes || '';
   openModal('modal-doc');
-}
+};
 
-async function saveDoc() {
+const saveDoc = async function() {
   const name = document.getElementById('doc-name').value.trim();
   const spec = document.getElementById('doc-spec').value.trim();
   if (!name || !spec) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
@@ -2230,9 +2322,9 @@ async function saveDoc() {
   }
   closeModal('modal-doc');
   renderDocs(); renderDashboard();
-}
+};
 
-async function deleteDoc(id) {
+const deleteDoc = async function(id) {
   if (!confirm('Eliminar este medico?')) return;
   docs = docs.filter(d => d.id !== id);
   await save(KEYS.docs, docs);
@@ -2254,9 +2346,9 @@ function renderNotes() {
     '<div class="note-body">' + n.body + '</div>' + (n.hasImg ? '<div style="margin-top:10px;"><img src="' + (localStorage.getItem('se_img_' + n.id) || n.imgUrl || '') + '" alt="' + (n.imgName||'imagen') + '" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="viewNoteImg(\'' + n.id + '\')"/></div>' : '') +
     '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author||'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>'
   ).join('');
-}
+};
 
-async function saveNote() {
+const saveNote = async function() {
   const title = document.getElementById('note-title').value.trim();
   const body = document.getElementById('note-body').value.trim();
   if (!title || !body) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
@@ -2294,9 +2386,9 @@ async function saveNote() {
   if (progress) progress.style.display = 'none';
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar'; }
   renderDashboard(); renderNotes(); toast(n.hasImg ? 'Nota guardada con imagen' : 'Nota guardada');
-}
+};
 
-async function deleteNote(id) {
+const deleteNote = async function(id) {
   if (!confirm('Eliminar esta nota?')) return;
   notes = notes.filter(n => n.id !== id);
   await save(KEYS.notes, notes);
@@ -2510,9 +2602,9 @@ function removeMemberCfg(index) {
 
 function showAdminSetup() {
   connectOneDriveFromSettings();
-}
+};
 
-async function connectOneDriveFromSettings() {
+const connectOneDriveFromSettings = async function() {
   const btn = document.getElementById('od-connect-settings-btn');
   const result = document.getElementById('od-connect-result');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...'; }
@@ -2682,9 +2774,9 @@ function removeAuthorizedUser(index) {
   toast(label + ' removido de usuarios autorizados');
   // Sync to OneDrive in background
   // Authorized emails saved locally
-}
+};
 
-async function saveSettings() {
+const saveSettings = async function() {
   settings.patname = (document.getElementById('cfg-patname') || {}).value || '';
   settings.dob = (document.getElementById('cfg-dob') || {}).value || '';
   settings.blood = (document.getElementById('cfg-blood') || {}).value || '';
