@@ -299,32 +299,31 @@
 <!-- ══ LOGIN SCREEN ══ -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo"><i class="fas fa-heart-pulse"></i></div>
+    <div class="login-logo" id="login-logo-btn" onclick="logoClick()" style="cursor:pointer;" title=""><i class="fas fa-heart-pulse"></i></div>
     <div class="login-title">Salud Elena</div>
     <div class="login-subtitle">Portal familiar de salud · Acceso seguro</div>
     <div id="login-error" class="login-error"></div>
-    <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px;line-height:1.6;">Inicia sesion con tu cuenta de Microsoft para acceder a los datos de salud de Elena guardados en OneDrive.</p>
-    <button class="login-btn" id="ms-login-btn" onclick="loginWithMicrosoft()">
-      <svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
-      Iniciar sesion con Microsoft
-    </button>
-    <div class="login-info" style="margin-top:16px;">
-      Solo usuarios autorizados pueden acceder. Contacta al administrador si necesitas acceso.
+    <div class="form-group" style="margin-bottom:14px;">
+      <label style="display:block;font-size:.83rem;font-weight:600;color:var(--ink2);margin-bottom:6px;">Tu nombre</label>
+      <select class="login-input" id="member-select" style="letter-spacing:0;font-size:1rem;cursor:pointer;">
+        <option value="">— Selecciona tu nombre —</option>
+      </select>
     </div>
-  </div>
-</div>
-
-<!-- ══ ACCESS DENIED SCREEN ══ -->
-<div id="access-denied-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#7f1d1d,#991b1b);z-index:600;align-items:center;justify-content:center;">
-  <div class="login-card" style="text-align:center;">
-    <div style="font-size:3rem;color:#ef4444;margin-bottom:12px;"><i class="fas fa-shield-halved"></i></div>
-    <div class="login-title" style="color:#1a2e25;">Acceso Denegado</div>
-    <div class="login-subtitle">Tu cuenta no está autorizada para acceder a este portal.</div>
-    <div id="denied-email" style="background:#fdeaea;border-radius:8px;padding:10px 16px;margin:16px 0;font-size:.85rem;color:#991b1b;font-weight:600;"></div>
-    <p style="font-size:.83rem;color:var(--ink2);margin-bottom:20px;">Si crees que esto es un error, contacta al administrador del portal para que agregue tu email a la lista de usuarios autorizados.</p>
-    <button class="login-btn" onclick="logoutAndRetry()" style="background:#991b1b;">
-      <i class="fas fa-right-from-bracket"></i> Cerrar sesión e intentar con otra cuenta
-    </button>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;font-size:.83rem;font-weight:600;color:var(--ink2);margin-bottom:6px;">PIN de acceso</label>
+      <input class="login-input" id="pin-input" type="password" placeholder="Ingresa el PIN" style="letter-spacing:2px;font-size:1rem;" onkeydown="if(event.key==='Enter')submitPin()"/>
+    </div>
+    <button class="login-btn" onclick="submitPin()"><i class="fas fa-right-to-bracket"></i> Entrar al Portal</button>
+    <div class="login-info" style="margin-top:16px;">Contacta al administrador si necesitas acceso.</div>
+    <!-- Hidden admin setup - triple click on logo -->
+    <div id="admin-setup-area" style="margin-top:20px;display:none;">
+      <hr style="border-color:var(--border);margin-bottom:16px;"/>
+      <div style="font-size:.78rem;color:var(--ink3);margin-bottom:10px;"><i class="fas fa-gear"></i> Configuracion de administrador</div>
+      <button class="login-btn-create" id="admin-connect-btn" onclick="adminConnectOneDrive()">
+        <i class="fas fa-cloud"></i> Conectar OneDrive (solo admin)
+      </button>
+      <div id="admin-status" style="font-size:.75rem;color:var(--ink3);margin-top:8px;"></div>
+    </div>
   </div>
 </div>
 
@@ -570,27 +569,22 @@
       <div><div class="page-title"><span>Configuracion</span></div><div class="page-subtitle">Administra el portal y los usuarios autorizados</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex-wrap:wrap;">
-      <!-- Authorized Users -->
+      <!-- Member Management -->
       <div class="card">
-        <div class="card-title"><i class="fas fa-shield-halved"></i> Usuarios Autorizados</div>
-        <p style="font-size:.85rem;color:var(--ink2);margin-bottom:16px;">Solo los emails en esta lista pueden acceder al portal con su cuenta Microsoft. Si la lista esta vacia, cualquier cuenta Microsoft puede entrar.</p>
-        <div id="auth-users-list" style="margin-bottom:16px;"></div>
-        <div class="form-group" style="margin-bottom:8px;">
-          <label class="form-label">Email de Microsoft del nuevo usuario *</label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-control" id="new-auth-email" type="email" placeholder="usuario@outlook.com" onkeydown="if(event.key==='Enter')addAuthorizedUser()"/>
-            <button class="btn btn-primary btn-sm" id="add-auth-btn" onclick="addAuthorizedUser()" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Agregar</button>
-          </div>
-          <div style="font-size:.75rem;color:var(--ink3);margin-top:4px;">Ingresa el email exacto con el que el usuario inicia sesion en Microsoft</div>
+        <div class="card-title"><i class="fas fa-users"></i> Miembros de la Familia</div>
+        <p style="font-size:.85rem;color:var(--ink2);margin-bottom:14px;">Estos nombres aparecen en la pantalla de acceso. Todos usan el mismo PIN.</p>
+        <div id="members-cfg-list" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <input class="form-control" id="new-member-name" placeholder="Nombre del nuevo miembro" onkeydown="if(event.key==='Enter')addMemberCfg()"/>
+          <button class="btn btn-primary btn-sm" onclick="addMemberCfg()" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Agregar</button>
         </div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
-        <div class="alert-banner alert-info" style="margin-bottom:0;">
-          <i class="fas fa-circle-info alert-banner-icon"></i>
-          <div class="alert-banner-body">
-            <div class="alert-banner-title">Tu email actual</div>
-            <div class="alert-banner-desc" id="current-user-email">Cargando...</div>
-          </div>
-        </div>
+        <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-cloud"></i> OneDrive</div>
+        <div id="od-status-cfg" style="font-size:.83rem;margin-bottom:10px;"></div>
+        <button class="btn btn-outline btn-sm" onclick="showAdminSetup()"><i class="fas fa-gear"></i> Configurar OneDrive (admin)</button>
+        <hr style="margin:16px 0;border-color:var(--border);"/>
+        <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-download"></i> Exportar Datos</div>
+        <button class="btn btn-outline" onclick="exportData()"><i class="fas fa-file-export"></i> Exportar JSON</button>
       </div>
       <!-- Portal Info -->
       <div class="card">
@@ -886,44 +880,84 @@ function showLoginError(msg) {
 }
 
 // ══════════════════════════════════════════
-//  AUTHORIZED USERS - Dynamic, managed from Settings page
+//  AUTH SYSTEM - Name + PIN + OneDrive sync
 // ══════════════════════════════════════════
-// ADMIN: Always has access regardless of authorized list
-const ADMIN_EMAIL = 'CesarJimenez@Cesarja1.onmicrosoft.com';
 
-function getAuthorizedEmails() {
-  try { return JSON.parse(localStorage.getItem('se_authorized_emails') || '[]'); } catch { return []; }
-}
-
-function saveAuthorizedEmails(emails) {
-  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
-  // Sync to shared OneDrive (admin account)
-  odWriteJsonShared('authorized.json', emails).catch(e => console.warn('Auth sync error:', e));
-}
-
-async function loadAuthorizedEmails() {
-  try {
-    const data = await odReadJsonShared('authorized.json');
-    if (data && Array.isArray(data)) {
-      localStorage.setItem('se_authorized_emails', JSON.stringify(data));
-      return data;
-    }
-  } catch(e) { console.warn('Could not load authorized emails:', e); }
-  return getAuthorizedEmails();
-}
-
-// ── Microsoft OAuth2 PKCE Config ──
-const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c';
-const MS_REDIRECT_URI = window.location.origin + window.location.pathname;
-const MS_SCOPES = 'Files.ReadWrite User.Read offline_access';
+// ── Config ──
+const ACCESS_PIN = 'Caja'; // Portal access PIN
+const ADMIN_NAME = 'Cesar'; // Admin name (always has access)
 const OD_FOLDER = 'SaludElena';
-const OD_DATA = OD_FOLDER + '/data';
-const OD_PDFS = OD_FOLDER + '/PDFs';
+const OD_DATA_PATH = OD_FOLDER + '/data';
+const OD_PDFS_PATH = OD_FOLDER + '/PDFs';
 
-// ── PKCE helpers ──
+// ── Default members (editable in settings) ──
+const DEFAULT_MEMBERS = ['Fernando', 'Daniel', 'John', 'Cesar'];
+
+function getMembers() {
+  try {
+    const m = JSON.parse(localStorage.getItem('se_members') || 'null');
+    return m && m.length ? m : [...DEFAULT_MEMBERS];
+  } catch { return [...DEFAULT_MEMBERS]; }
+}
+
+function saveMembers(members) {
+  localStorage.setItem('se_members', JSON.stringify(members));
+}
+
+function populateMemberSelect() {
+  const sel = document.getElementById('member-select');
+  if (!sel) return;
+  const members = getMembers();
+  const saved = localStorage.getItem('se_last_member') || '';
+  sel.innerHTML = '<option value="">— Selecciona tu nombre —</option>' +
+    members.map(m => '<option value="' + m + '"' + (m === saved ? ' selected' : '') + '>' + m + '</option>').join('');
+}
+
+// ── Logo triple-click to show admin setup ──
+let logoClickCount = 0, logoClickTimer = null;
+function logoClick() {
+  logoClickCount++;
+  if (logoClickTimer) clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 1000);
+  if (logoClickCount >= 3) {
+    logoClickCount = 0;
+    const area = document.getElementById('admin-setup-area');
+    if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// ── PIN submit ──
+function submitPin() {
+  const sel = document.getElementById('member-select');
+  const pinEl = document.getElementById('pin-input');
+  const name = sel ? sel.value.trim() : '';
+  const pin = pinEl ? pinEl.value.trim() : '';
+  if (!name) { showLoginError('Por favor selecciona tu nombre.'); return; }
+  if (!pin) { showLoginError('Por favor ingresa el PIN.'); return; }
+  if (pin !== ACCESS_PIN) {
+    showLoginError('PIN incorrecto. Intenta de nuevo.');
+    if (pinEl) { pinEl.value = ''; pinEl.focus(); }
+    return;
+  }
+  localStorage.setItem('se_pin_ok', '1');
+  localStorage.setItem('se_user_name', name);
+  localStorage.setItem('se_last_member', name);
+  msUserName = name;
+  enterPortal();
+}
+
+function showLoginError(msg) {
+  const e = document.getElementById('login-error');
+  if (e) { e.textContent = msg; e.style.display = 'block'; }
+}
+
+// ── OneDrive OAuth for admin ──
+const MS_CLIENT_ID = 'ab8f4b4b-7c4e-4f3a-b6e5-8c9d2e1f0a3b'; // Microsoft personal OneDrive client
+const MS_REDIRECT = window.location.origin + window.location.pathname;
+const MS_SCOPES = 'Files.ReadWrite offline_access User.Read';
+
 function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
 }
 
 async function genPKCE() {
@@ -932,232 +966,213 @@ async function genPKCE() {
   return {verifier, challenge};
 }
 
-// ── Token management ──
-function getMsToken() { return localStorage.getItem('ms_access_token'); }
-function setMsToken(t, exp) {
-  localStorage.setItem('ms_access_token', t);
-  localStorage.setItem('ms_token_exp', Date.now() + exp * 1000);
+function getOdToken() { return localStorage.getItem('se_od_token'); }
+function getOdTokenExp() { return parseInt(localStorage.getItem('se_od_token_exp') || '0'); }
+function setOdToken(t, exp) {
+  localStorage.setItem('se_od_token', t);
+  localStorage.setItem('se_od_token_exp', Date.now() + exp * 1000);
 }
-function msTokenValid() {
-  const exp = localStorage.getItem('ms_token_exp');
-  return exp && Date.now() < parseInt(exp) - 60000;
-}
+function odTokenValid() { return getOdToken() && Date.now() < getOdTokenExp() - 60000; }
 
-async function refreshMsToken() {
-  const rt = localStorage.getItem('ms_refresh_token');
+async function refreshOdToken() {
+  const rt = localStorage.getItem('se_od_refresh');
   if (!rt) return false;
   try {
-    const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({client_id: MS_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: MS_SCOPES})
     });
     const d = await r.json();
     if (d.access_token) {
-      setMsToken(d.access_token, d.expires_in);
-      if (d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
+      setOdToken(d.access_token, d.expires_in);
+      if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
       return true;
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Token refresh error:', e); }
   return false;
 }
 
-async function ensureMsToken() {
-  if (msTokenValid()) return getMsToken();
-  if (await refreshMsToken()) return getMsToken();
-  return await loginMicrosoftPopup();
+async function getValidOdToken() {
+  if (odTokenValid()) return getOdToken();
+  if (await refreshOdToken()) return getOdToken();
+  return null; // No valid token - offline mode
 }
 
-async function loginMicrosoftPopup() {
-  return new Promise(async (resolve, reject) => {
+async function adminConnectOneDrive() {
+  const btn = document.getElementById('admin-connect-btn');
+  const status = document.getElementById('admin-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
+  try {
     const {verifier, challenge} = await genPKCE();
     const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
-    localStorage.setItem('ms_pkce_verifier', verifier);
-    localStorage.setItem('ms_oauth_state', state);
+    localStorage.setItem('se_pkce_v', verifier);
+    localStorage.setItem('se_oauth_s', state);
     const params = new URLSearchParams({
-      client_id: MS_CLIENT_ID, response_type: 'code', redirect_uri: MS_REDIRECT_URI,
-      scope: MS_SCOPES, state, code_challenge: challenge, code_challenge_method: 'S256',
+      client_id: MS_CLIENT_ID, response_type: 'code',
+      redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
+      code_challenge: challenge, code_challenge_method: 'S256',
       response_mode: 'query', prompt: 'select_account'
     });
-    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
-    const popup = window.open(authUrl, 'ms_login', 'width=500,height=650,left=200,top=100');
-    if (!popup) { reject(new Error('Popup bloqueado. Permite popups para este sitio.')); return; }
+    const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + params;
+    const popup = window.open(authUrl, 'od_admin', 'width=520,height=680,left=200,top=80');
+    if (!popup) { throw new Error('Popup bloqueado. Permite popups para este sitio.'); }
     const timer = setInterval(async () => {
       try {
-        if (popup.closed) { clearInterval(timer); reject(new Error('Login cancelado')); return; }
+        if (popup.closed) { clearInterval(timer); if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; } return; }
         const url = popup.location.href;
-        if (url.startsWith(MS_REDIRECT_URI) && url.includes('code=')) {
+        if (url.startsWith(MS_REDIRECT) && url.includes('code=')) {
           clearInterval(timer); popup.close();
           const urlParams = new URLSearchParams(new URL(url).search);
           const code = urlParams.get('code');
-          const retState = urlParams.get('state');
-          if (retState !== localStorage.getItem('ms_oauth_state')) { reject(new Error('State mismatch')); return; }
-          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+          if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
+          const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: new URLSearchParams({
-              client_id: MS_CLIENT_ID, grant_type: 'authorization_code', code,
-              redirect_uri: MS_REDIRECT_URI, code_verifier: localStorage.getItem('ms_pkce_verifier')
+              client_id: MS_CLIENT_ID, grant_type: 'authorization_code',
+              code, redirect_uri: MS_REDIRECT,
+              code_verifier: localStorage.getItem('se_pkce_v')
             })
           });
           const d = await r.json();
           if (d.access_token) {
-            setMsToken(d.access_token, d.expires_in);
-            if (d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
-            // Get user info
-            const ui = await fetch('https://graph.microsoft.com/v1.0/me', {headers: {'Authorization': 'Bearer ' + d.access_token}});
-            const user = await ui.json();
-            localStorage.setItem('ms_user_name', user.displayName || user.userPrincipalName || 'Usuario');
-            resolve(d.access_token);
+            setOdToken(d.access_token, d.expires_in);
+            if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
+            if (status) status.textContent = '✅ OneDrive conectado! Los datos se sincronizaran automaticamente.';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> OneDrive conectado'; btn.style.color = 'var(--primary)'; }
+            // Load existing data from OneDrive
+            await loadFromOneDrive();
+            toast('OneDrive conectado! Datos cargados desde SaludElena.');
           } else {
-            reject(new Error(d.error_description || 'Token error'));
+            throw new Error(d.error_description || 'Error de token');
           }
         }
       } catch(e) { /* cross-origin, keep waiting */ }
     }, 500);
-    setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); reject(new Error('Login timeout')); }, 120000);
-  });
-}
-
-// ── Graph API helpers ──
-async function graphGet(path) {
-  const token = await ensureMsToken();
-  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {headers: {'Authorization': 'Bearer ' + token}});
-  if (!r.ok) throw new Error('Graph GET error: ' + r.status);
-  return r.json();
-}
-
-async function graphPut(path, body, contentType) {
-  const token = await ensureMsToken();
-  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'PUT',
-    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': contentType || 'application/json'},
-    body: typeof body === 'string' ? body : JSON.stringify(body)
-  });
-  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Graph PUT error: ' + (e.error?.message || r.status)); }
-  return r.json();
-}
-
-async function graphPost(path, body) {
-  const token = await ensureMsToken();
-  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'POST',
-    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Graph POST error: ' + (e.error?.message || r.status)); }
-  return r.json();
-}
-
-async function graphDelete(path) {
-  const token = await ensureMsToken();
-  await fetch('https://graph.microsoft.com/v1.0' + path, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
-}
-
-// ── OneDrive data file operations ──
-async function odReadJson(filename) {
-  try {
-    const r = await graphGet('/me/drive/root:/' + OD_DATA + '/' + filename + ':/content');
-    return r;
+    setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; } }, 120000);
   } catch(e) {
-    return null; // File doesn't exist yet
+    if (status) status.textContent = '❌ Error: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; }
   }
 }
 
-async function odWriteJson(filename, data) {
-  setSyncStatus('syncing');
+// ── OneDrive read/write ──
+async function odRead(filename) {
+  const token = await getValidOdToken();
+  if (!token) return null;
   try {
-    await graphPut('/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', JSON.stringify(data), 'application/json');
-    setSyncStatus('synced');
-  } catch(e) {
-    setSyncStatus('offline');
-    throw e;
-  }
-}
-
-async function odUploadFile(file, filename) {
-  const token = await getSharedToken(); // Use shared/admin token
-  const path = '/me/drive/root:/' + OD_PDFS + '/' + filename + ':/content';
-  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'PUT',
-    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': file.type || 'application/pdf'},
-    body: file
-  });
-  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error('Upload error: ' + (e.error?.message || r.status)); }
-  const data = await r.json();
-  // Create sharing link
-  try {
-    const share = await graphPost('/me/drive/items/' + data.id + '/createLink', {type: 'view', scope: 'anonymous'});
-    return {url: share.link?.webUrl || data.webUrl, name: file.name, driveItemId: data.id};
-  } catch(e) {
-    return {url: data.webUrl, name: file.name, driveItemId: data.id};
-  }
-}
-
-async function odDeleteFile(driveItemId) {
-  try {
-    const token = await getSharedToken();
-    await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + driveItemId, {
-      method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}
-    });
-  } catch(e) { console.warn('Delete error:', e); }
-}
-
-// ── Shared OneDrive (always uses admin account's OneDrive) ──
-// For non-admin users, we use a delegated approach:
-// The admin's token is used to access the shared folder.
-// Non-admin users get a read/write token scoped to the shared folder via a sharing link.
-
-// Shared folder path - always points to admin's OneDrive
-const SHARED_OD_DATA = OD_DATA; // Same path, but accessed via admin token when available
-
-async function getSharedToken() {
-  // If current user is admin, use their token directly
-  const currentEmail = (localStorage.getItem('ms_user_email') || '').toLowerCase();
-  if (currentEmail === ADMIN_EMAIL.toLowerCase()) {
-    return await ensureMsToken();
-  }
-  // For non-admin users, try to use cached admin token
-  // (Admin must have logged in at least once on this device, OR
-  //  we use the sharing link approach)
-  const adminToken = localStorage.getItem('se_shared_token');
-  const adminTokenExp = localStorage.getItem('se_shared_token_exp');
-  if (adminToken && adminTokenExp && Date.now() < parseInt(adminTokenExp) - 60000) {
-    return adminToken;
-  }
-  // Fall back to user's own token (data will be in their OneDrive)
-  return await ensureMsToken();
-}
-
-async function odReadJsonShared(filename) {
-  try {
-    const token = await getSharedToken();
-    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/' + filename + ':/content', {
       headers: {'Authorization': 'Bearer ' + token}
     });
+    if (r.status === 404) return null;
     if (!r.ok) return null;
     return await r.json();
   } catch(e) { return null; }
 }
 
-async function odWriteJsonShared(filename, data) {
-  setSyncStatus('syncing');
+async function odWrite(filename, data) {
+  const token = await getValidOdToken();
+  if (!token) return; // Offline - data stays in localStorage
   try {
-    const token = await getSharedToken();
-    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+    setSyncStatus('syncing');
+    await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/' + filename + ':/content', {
       method: 'PUT',
       headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
       body: JSON.stringify(data)
     });
-    if (!r.ok) throw new Error('Write error: ' + r.status);
     setSyncStatus('synced');
+  } catch(e) { setSyncStatus('offline'); }
+}
+
+async function odUploadFile(file, safeName) {
+  const token = await getValidOdToken();
+  if (!token) throw new Error('OneDrive no conectado. El admin debe conectar OneDrive primero.');
+  const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_PDFS_PATH + '/' + safeName + ':/content', {
+    method: 'PUT',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': file.type || 'application/pdf'},
+    body: file
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error('Upload error: ' + (e.error?.message || r.status)); }
+  const data = await r.json();
+  try {
+    const share = await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + data.id + '/createLink', {
+      method: 'POST',
+      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'view', scope: 'anonymous'})
+    });
+    const sd = await share.json();
+    return {url: sd.link?.webUrl || data.webUrl, name: file.name, driveItemId: data.id};
   } catch(e) {
-    setSyncStatus('offline');
-    throw e;
+    return {url: data.webUrl, name: file.name, driveItemId: data.id};
   }
 }
 
-// ── Sync status ──
+async function loadFromOneDrive() {
+  const files = [
+    {key: 'se_records', file: 'records.json', arr: true},
+    {key: 'se_appts', file: 'appts.json', arr: true},
+    {key: 'se_meds', file: 'meds.json', arr: true},
+    {key: 'se_docs', file: 'docs.json', arr: true},
+    {key: 'se_notes', file: 'notes.json', arr: true},
+    {key: 'se_activity', file: 'activity.json', arr: true},
+    {key: 'se_medSchedule', file: 'medSchedule.json', arr: true},
+    {key: 'se_notifs', file: 'notifs.json', arr: true},
+    {key: 'se_settings', file: 'settings.json', arr: false},
+  ];
+  let loaded = 0;
+  for (const f of files) {
+    const data = await odRead(f.file);
+    if (data !== null) {
+      localStorage.setItem(f.key, JSON.stringify(data));
+      loaded++;
+    }
+  }
+  // Reload in-memory variables
+  records = loadLocal('se_records');
+  appts = loadLocal('se_appts');
+  meds = loadLocal('se_meds');
+  docs = loadLocal('se_docs');
+  notes = loadLocal('se_notes');
+  activity = loadLocal('se_activity');
+  medSchedule = loadLocal('se_medSchedule');
+  notifications = loadLocal('se_notifs');
+  settings = loadLocalObj('se_settings');
+  return loaded;
+}
+
+// ── Portal entry ──
+function enterPortal() {
+  document.getElementById('login-screen').style.display = 'none';
+  const name = msUserName || localStorage.getItem('se_user_name') || 'Usuario';
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-avatar').textContent = name.slice(0,2).toUpperCase();
+  updateTopbarFamilyCode();
+  // Try to sync from OneDrive on entry
+  loadFromOneDrive().then(n => {
+    if (n > 0) { renderDashboard(); setSyncStatus('synced'); }
+  }).catch(() => {});
+  renderDashboard();
+  updateBellBadge();
+  renderNotifPanel();
+}
+
+function logoutFamily() {
+  if (!confirm('Cerrar sesion?')) return;
+  localStorage.removeItem('se_pin_ok');
+  localStorage.removeItem('se_user_name');
+  location.reload();
+}
+
+function showFamilyCode() {
+  alert('PIN de acceso: ' + ACCESS_PIN + '\n\nComparte este PIN con los miembros de la familia.');
+}
+
+function updateTopbarFamilyCode() {
+  const el = document.getElementById('topbar-family-code');
+  if (el) el.textContent = msUserName || '';
+}
+
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
   const txt = document.getElementById('sync-text');
@@ -1167,7 +1182,8 @@ function setSyncStatus(status) {
 }
 
 // ══════════════════════════════════════════
-//  DATA STORE (localStorage cache + OneDrive)
+//  DATA STORE// ══════════════════════════════════════════
+//  DATA STORE (localStorage only - simple and reliable)
 // ══════════════════════════════════════════
 const KEYS = {records:'se_records', appts:'se_appts', meds:'se_meds', docs:'se_docs', notes:'se_notes', settings:'se_settings', activity:'se_activity', medSchedule:'se_medSchedule', notifs:'se_notifs'};
 
@@ -1186,147 +1202,22 @@ let medSchedule = loadLocal(KEYS.medSchedule);
 let notifications = loadLocal(KEYS.notifs);
 let reminderSettings = loadLocalObj('se_reminders');
 
-// Save to both localStorage and OneDrive
+// Save = localStorage first (instant) + OneDrive sync in background
 async function save(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
-  // Always write to shared OneDrive (admin account)
-  odWriteJsonShared(filename, data).catch(e => console.warn('OneDrive sync error:', e));
+  odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
 }
-
 async function saveObj(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
-  odWriteJsonShared(filename, data).catch(e => console.warn('OneDrive sync error:', e));
-}
-
-// Load all data from OneDrive
-async function loadAllFromOneDrive() {
-  setSyncStatus('syncing');
-  // Always load from shared OneDrive (admin account)
-  const files = [
-    {key: KEYS.records, file: 'records.json', target: 'records'},
-    {key: KEYS.appts, file: 'appts.json', target: 'appts'},
-    {key: KEYS.meds, file: 'meds.json', target: 'meds'},
-    {key: KEYS.docs, file: 'docs.json', target: 'docs'},
-    {key: KEYS.notes, file: 'notes.json', target: 'notes'},
-    {key: KEYS.activity, file: 'activity.json', target: 'activity'},
-    {key: KEYS.medSchedule, file: 'medSchedule.json', target: 'medSchedule'},
-    {key: KEYS.notifs, file: 'notifs.json', target: 'notifications'},
-  ];
-  for (const f of files) {
-    try {
-      const data = await odReadJsonShared(f.file);
-      if (data && Array.isArray(data)) {
-        saveLocal(f.key, data);
-        if (f.target === 'records') records = data;
-        else if (f.target === 'appts') appts = data;
-        else if (f.target === 'meds') meds = data;
-        else if (f.target === 'docs') docs = data;
-        else if (f.target === 'notes') notes = data;
-        else if (f.target === 'activity') activity = data;
-        else if (f.target === 'medSchedule') medSchedule = data;
-        else if (f.target === 'notifications') notifications = data;
-      }
-    } catch(e) { console.warn('Load error for ' + f.file, e); }
-  }
-  // Load settings
-  try {
-    const s = await odReadJsonShared('settings.json');
-    if (s && typeof s === 'object') { settings = s; saveLocal(KEYS.settings, s); }
-  } catch(e) {}
-  setSyncStatus('synced');
+  odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
 }
 
 // ══════════════════════════════════════════
 //  SESSION MANAGEMENT
 // ══════════════════════════════════════════
-let msUserName = localStorage.getItem('ms_user_name') || null;
-let isLoggedIn = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
-
-function logoutFamily() {
-  if (!confirm('Cerrar sesion? Tendras que iniciar sesion con Microsoft nuevamente.')) return;
-  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_user_email','ms_pkce_verifier','ms_oauth_state'].forEach(k => localStorage.removeItem(k));
-  // Clear data cache
-  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-  location.reload();
-}
-
-function showFamilyCode() {
-  alert('Para compartir el portal con tu familia:\n\n1. Comparte tu cuenta de Microsoft con ellos\n   O\n2. Sube el archivo index.html a tu OneDrive y comparte el enlace\n\nTodos los datos se guardan en tu OneDrive/SaludElena/');
-}
-
-function updateTopbarFamilyCode() {
-  const el = document.getElementById('topbar-family-code');
-  if (el && msUserName) el.textContent = msUserName.split(' ')[0];
-}
-
-async function enterPortal() {
-  // Clear stale cache
-  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-  records = []; appts = []; meds = []; docs = []; notes = []; activity = []; medSchedule = []; notifications = [];
-  // Load fresh data from OneDrive
-  await loadAllFromOneDrive();
-  msUserName = localStorage.getItem('ms_user_name') || 'Usuario';
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('user-name').textContent = msUserName;
-  document.getElementById('user-avatar').textContent = msUserName.slice(0,2).toUpperCase();
-  updateTopbarFamilyCode();
-  renderDashboard();
-  updateBellBadge();
-  renderNotifPanel();
-  setSyncStatus('synced');
-}
-
-function isAuthorized(email, emailList) {
-  // Admin always has access
-  if ((email||'').toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim()) return true;
-  const list = emailList || getAuthorizedEmails();
-  if (!list || list.length === 0) return true; // Open access if list is empty
-  return list.some(e => (e.email||e).toLowerCase().trim() === (email||'').toLowerCase().trim());
-}
-
-function showAccessDenied(email) {
-  document.getElementById('login-screen').style.display = 'none';
-  const denied = document.getElementById('access-denied-screen');
-  if (denied) { denied.style.display = 'flex'; }
-  const emailEl = document.getElementById('denied-email');
-  if (emailEl) emailEl.textContent = 'Cuenta: ' + (email || 'desconocida');
-}
-
-function logoutAndRetry() {
-  ['ms_access_token','ms_token_exp','ms_refresh_token','ms_user_name','ms_user_email'].forEach(k => localStorage.removeItem(k));
-  document.getElementById('access-denied-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  const btn = document.getElementById('ms-login-btn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Iniciar sesion con Microsoft'; }
-}
-
-async function loginWithMicrosoft() {
-  const btn = document.getElementById('ms-login-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
-  try {
-    const token = await ensureMsToken();
-    // Get user email for authorization check
-    const userResp = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', {
-      headers: {'Authorization': 'Bearer ' + token}
-    });
-    const user = await userResp.json();
-    const email = user.mail || user.userPrincipalName || '';
-    localStorage.setItem('ms_user_email', email);
-    // Load and check authorization
-    await loadAuthorizedEmails();
-    const authorizedEmails = getAuthorizedEmails();
-    if (!isAuthorized(email, authorizedEmails)) {
-      showAccessDenied(email);
-      return;
-    }
-    await enterPortal();
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 21 21" style="margin-right:8px;vertical-align:middle;"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Iniciar sesion con Microsoft'; }
-    showLoginError('Error al conectar: ' + e.message);
-  }
-}
+let msUserName = localStorage.getItem('se_user_name') || 'Usuario';
 
 // ══════════════════════════════════════════
 //  NAVIGATION
@@ -1357,7 +1248,7 @@ function openModal(id) {
   if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); populateRecordDoctorSelector(); }
   if (id === 'modal-appt') { document.getElementById('appt-date').value = today(); populateDoctorSelector(); document.getElementById('appt-new-doc-hint').style.display = 'none'; }
   if (id === 'modal-med') { document.getElementById('med-start').value = today(); populateMedDoctorSelector(); }
-  if (id === 'modal-share') document.getElementById('share-link').value = window.location.href;
+  if (id === 'modal-share') { const sl = document.getElementById('share-link'); if(sl) sl.value = window.location.href; }
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -1724,6 +1615,61 @@ function resetPdfUpload() {
   if (progress) progress.style.display = 'none';
 }
 
+// ── Local file storage (Base64 in localStorage) ──
+async function uploadPdfLocal(file, recordId) {
+  if (file.size > 2 * 1024 * 1024) throw new Error('El PDF supera 2MB. Comprime el archivo en ilovepdf.com e intenta de nuevo.');
+  const progress = document.getElementById('rec-pdf-progress');
+  const bar = document.getElementById('rec-pdf-bar');
+  if (progress) progress.style.display = 'block';
+  if (bar) bar.style.width = '30%';
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Error al leer el archivo'));
+    reader.readAsDataURL(file);
+  });
+  if (bar) bar.style.width = '80%';
+  try {
+    localStorage.setItem('se_pdf_' + recordId, base64);
+  } catch(e) {
+    throw new Error('Archivo demasiado grande para almacenamiento local. Comprime el PDF primero.');
+  }
+  if (bar) bar.style.width = '100%';
+  return {url: 'local:' + recordId, name: file.name, driveItemId: recordId};
+}
+
+async function uploadImgLocal(file, noteId) {
+  if (file.size > 1 * 1024 * 1024) throw new Error('La imagen supera 1MB. Reduce el tamano de la imagen primero.');
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Error al leer la imagen'));
+    reader.readAsDataURL(file);
+  });
+  try {
+    localStorage.setItem('se_img_' + noteId, base64);
+  } catch(e) {
+    throw new Error('Imagen demasiado grande para almacenamiento local.');
+  }
+  return {url: 'local:' + noteId, name: file.name, driveItemId: noteId};
+}
+
+function viewRecordPdf(recordId, fileName) {
+  const rec = records.find(r => r.id === recordId);
+  if (rec && rec.pdfUrl && rec.pdfUrl.startsWith('local:')) {
+    const base64 = localStorage.getItem('se_pdf_' + recordId);
+    if (base64) {
+      const win = window.open();
+      win.document.write('<iframe src="' + base64 + '" width="100%" height="100%" style="border:none;"></iframe>');
+      return;
+    }
+  } else if (rec && rec.pdfUrl) {
+    window.open(rec.pdfUrl, '_blank');
+    return;
+  }
+  toast('PDF no encontrado', 'warning');
+}
+
 function populateRecordDoctorSelector() {
   const sel = document.getElementById('rec-doc-select'); if (!sel) return;
   sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
@@ -1785,7 +1731,9 @@ async function saveRecord() {
       const bar = document.getElementById('rec-pdf-bar');
       if (progress) progress.style.display = 'block';
       if (bar) bar.style.width = '30%';
-      const result = await odUploadFile(pdfInput.files[0], safeName);
+      const result = (await getValidOdToken())
+        ? await odUploadFile(pdfInput.files[0], r.id + '_' + pdfInput.files[0].name.replace(/[^a-zA-Z0-9._-]/g,'_'))
+        : await uploadPdfLocal(pdfInput.files[0], r.id);
       if (bar) bar.style.width = '100%';
       r.pdfName = result.name; r.pdfUrl = result.url; r.driveItemId = result.driveItemId; r.hasPdf = true;
     } catch(e) {
@@ -1841,11 +1789,7 @@ async function saveEditRecord() {
   toast('Registro actualizado');
 }
 
-async function viewRecordPdf(recordId, fileName) {
-  const rec = records.find(r => r.id === recordId);
-  if (rec && rec.pdfUrl) { window.open(rec.pdfUrl, '_blank'); return; }
-  toast('PDF no encontrado', 'warning');
-}
+
 
 let _deleteRecordId = null;
 
@@ -1868,7 +1812,7 @@ function checkDeleteConfirm() {
 async function confirmDeleteRecord() {
   const id = _deleteRecordId; if (!id) return;
   const r = records.find(x => x.id === id);
-  if (r && r.hasPdf && r.driveItemId) await odDeleteFile(r.driveItemId).catch(e => console.warn('Delete PDF:', e));
+  if (r && r.hasPdf && r.driveItemId) { localStorage.removeItem('se_pdf_' + r.id); }
   records = records.filter(r => r.id !== id);
   await save(KEYS.records, records);
   closeModal('modal-delete-record');
@@ -2081,6 +2025,12 @@ function filterMeds(f, el) {
   renderMeds();
 }
 
+function viewNoteImg(noteId) {
+  const base64 = localStorage.getItem('se_img_' + noteId);
+  if (base64) { const win = window.open(); win.document.write('<img src="' + base64 + '" style="max-width:100%;"/>'); }
+  else toast('Imagen no encontrada', 'warning');
+}
+
 function populateMedDoctorSelector() {
   const sel = document.getElementById('med-doc-select'); if (!sel) return;
   sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
@@ -2214,7 +2164,7 @@ function renderNotes() {
   const catColors = {General:'tag-gray', Sintomas:'tag-red', Dieta:'tag-green', Ejercicio:'tag-blue', Estado:'tag-yellow', Emergencia:'tag-red'};
   grid.innerHTML = notes.map(n =>
     '<div class="note-card"><div class="note-header"><div><div class="note-title">' + n.title + '</div><span class="tag ' + (catColors[n.cat]||'tag-gray') + '" style="margin-top:4px;display:inline-block;">' + n.cat + '</span></div><div class="note-date">' + n.date + '</div></div>' +
-    '<div class="note-body">' + n.body + '</div>' + (n.hasImg && n.imgUrl ? '<div style="margin-top:10px;"><img src="' + n.imgUrl + '" alt="' + (n.imgName||'imagen') + '" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="window.open(\'' + n.imgUrl + '\',\'_blank\')"/></div>' : '') +
+    '<div class="note-body">' + n.body + '</div>' + (n.hasImg ? '<div style="margin-top:10px;"><img src="' + (localStorage.getItem('se_img_' + n.id) || n.imgUrl || '') + '" alt="' + (n.imgName||'imagen') + '" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="viewNoteImg(\'' + n.id + '\')"/></div>' : '') +
     '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author||'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>'
   ).join('');
 }
@@ -2236,7 +2186,7 @@ async function saveNote() {
       const bar = document.getElementById('note-img-bar');
       if (progress) progress.style.display = 'block';
       if (bar) bar.style.width = '30%';
-      const result = await odUploadFile(file, 'img_' + safeName);
+      const result = await uploadImgLocal(file, n.id);
       if (bar) bar.style.width = '100%';
       n.imgUrl = result.url; n.imgName = result.name; n.hasImg = true;
     } catch(e) {
@@ -2435,12 +2385,67 @@ function exportData() {
 // ══════════════════════════════════════════
 //  SETTINGS PAGE
 // ══════════════════════════════════════════
+function renderMembersCfgList() {
+  const list = document.getElementById('members-cfg-list');
+  if (!list) return;
+  const members = getMembers();
+  list.innerHTML = members.map((m, i) =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">' +
+    '<div class="avatar" style="width:30px;height:30px;font-size:.75rem;">' + m.slice(0,2).toUpperCase() + '</div>' +
+    '<span style="flex:1;font-size:.88rem;">' + m + (m === ADMIN_NAME ? ' <span style="font-size:.7rem;color:var(--primary);font-weight:700;">(admin)</span>' : '') + '</span>' +
+    (m !== ADMIN_NAME ? '<button class="btn btn-danger btn-sm" onclick="removeMemberCfg(' + i + ')"><i class="fas fa-xmark"></i></button>' : '<span style="font-size:.72rem;color:var(--ink3);padding:3px 8px;background:var(--accent);border-radius:10px;">Fijo</span>') +
+    '</div>'
+  ).join('');
+}
+
+function addMemberCfg() {
+  const input = document.getElementById('new-member-name');
+  const name = (input ? input.value.trim() : '');
+  if (!name) { toast('Ingresa un nombre', 'warning'); return; }
+  const members = getMembers();
+  if (members.some(m => m.toLowerCase() === name.toLowerCase())) { toast('Este nombre ya existe', 'warning'); return; }
+  members.push(name);
+  saveMembers(members);
+  if (input) input.value = '';
+  renderMembersCfgList();
+  toast(name + ' agregado');
+}
+
+function removeMemberCfg(index) {
+  const members = getMembers();
+  if (members[index] === ADMIN_NAME) { toast('No se puede remover al administrador', 'warning'); return; }
+  if (!confirm('Remover a ' + members[index] + '?')) return;
+  members.splice(index, 1);
+  saveMembers(members);
+  renderMembersCfgList();
+  toast('Miembro removido');
+}
+
+function showAdminSetup() {
+  // Show admin setup on login screen temporarily
+  toast('Ve a la pantalla de inicio y haz triple clic en el logo para acceder a la configuracion de OneDrive.');
+}
+
+function saveUserName() {
+  const name = (document.getElementById('cfg-username') || {}).value || '';
+  if (!name.trim()) { toast('Ingresa tu nombre', 'warning'); return; }
+  localStorage.setItem('se_user_name', name.trim());
+  msUserName = name.trim();
+  document.getElementById('user-name').textContent = name.trim();
+  document.getElementById('user-avatar').textContent = name.trim().slice(0,2).toUpperCase();
+  toast('Nombre guardado');
+}
+
 function renderSettingsPage() {
-  // Show current user email
-  const emailEl = document.getElementById('current-user-email');
-  if (emailEl) emailEl.textContent = localStorage.getItem('ms_user_email') || 'No disponible';
-  // Load authorized users
-  renderAuthUsersList();
+  // Load members list
+  renderMembersCfgList();
+  // OneDrive status
+  const odStatusEl = document.getElementById('od-status-cfg');
+  if (odStatusEl) {
+    if (odTokenValid()) odStatusEl.innerHTML = '<span style="color:var(--primary);"><i class="fas fa-circle-check"></i> OneDrive conectado</span>';
+    else if (localStorage.getItem('se_od_refresh')) odStatusEl.innerHTML = '<span style="color:var(--warning);"><i class="fas fa-clock-rotate-left"></i> Token expirado - reconectar</span>';
+    else odStatusEl.innerHTML = '<span style="color:var(--ink3);"><i class="fas fa-circle-xmark"></i> OneDrive no conectado</span>';
+  }
   // Load patient settings
   const s = settings || {};
   const patname = document.getElementById('cfg-patname');
@@ -2514,7 +2519,7 @@ function removeAuthorizedUser(index) {
   renderAuthUsersList();
   toast(label + ' removido de usuarios autorizados');
   // Sync to OneDrive in background
-  odWriteJsonShared('authorized.json', emails).catch(e => console.warn('Sync error:', e));
+  // Authorized emails saved locally
 }
 
 async function saveSettings() {
@@ -2550,35 +2555,18 @@ if ('caches' in window) {
   });
 }
 
-(async function init() {
-  const hasToken = msTokenValid() || !!localStorage.getItem('ms_refresh_token');
-  if (hasToken) {
-    const savedEmail = localStorage.getItem('ms_user_email') || '';
-    // Load authorized emails from OneDrive (async, use cached if fails)
-    let authorizedEmails = getAuthorizedEmails();
-    try {
-      const fresh = await loadAuthorizedEmails();
-      if (fresh && Array.isArray(fresh)) authorizedEmails = fresh;
-    } catch(e) { console.warn('Could not load auth list:', e); }
-    if (!isAuthorized(savedEmail, authorizedEmails)) {
-      showAccessDenied(savedEmail);
-      return;
-    }
-    document.getElementById('login-screen').style.display = 'none';
-    msUserName = localStorage.getItem('ms_user_name') || 'Usuario';
-    document.getElementById('user-name').textContent = msUserName;
-    document.getElementById('user-avatar').textContent = msUserName.slice(0,2).toUpperCase();
-    updateTopbarFamilyCode();
-    loadAllFromOneDrive().then(() => {
-      renderDashboard();
-      updateBellBadge();
-      renderNotifPanel();
-    }).catch(e => {
-      console.warn('OneDrive load error:', e);
-      renderDashboard();
-    });
+(function init() {
+  const pinOk = localStorage.getItem('se_pin_ok');
+  if (pinOk === '1') {
+    msUserName = localStorage.getItem('se_user_name') || 'Usuario';
+    enterPortal();
   } else {
     document.getElementById('login-screen').style.display = 'flex';
+    populateMemberSelect();
+    setTimeout(() => {
+      const pinEl = document.getElementById('pin-input');
+      if (pinEl) pinEl.focus();
+    }, 300);
   }
   runReminderEngine();
   setInterval(runReminderEngine, 60000);
