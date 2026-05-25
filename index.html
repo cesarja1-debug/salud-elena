@@ -584,10 +584,13 @@
         <button class="btn btn-primary btn-sm" id="od-connect-settings-btn" onclick="connectOneDriveFromSettings()" style="margin-bottom:8px;width:100%;">
           <i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)
         </button>
-        <button class="btn btn-outline btn-sm" onclick="manualSync()" style="width:100%;">
-          <i class="fas fa-rotate"></i> Sincronizar ahora
+        <button class="btn btn-outline btn-sm" onclick="manualSync()" style="width:100%;margin-bottom:6px;">
+          <i class="fas fa-rotate"></i> Cargar datos desde OneDrive
         </button>
-        <div id="od-connect-result" style="font-size:.78rem;color:var(--ink2);margin-top:8px;"></div>
+        <button class="btn btn-outline btn-sm" onclick="pushLocalToOneDrive()" style="width:100%;color:var(--info);border-color:var(--info);">
+          <i class="fas fa-cloud-arrow-up"></i> Subir datos locales a OneDrive
+        </button>
+        <div id="od-connect-result" style="font-size:.78rem;color:var(--ink2);margin-top:8px;line-height:1.5;"></div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
         <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-download"></i> Exportar Datos</div>
         <button class="btn btn-outline" onclick="exportData()"><i class="fas fa-file-export"></i> Exportar JSON</button>
@@ -893,7 +896,7 @@ function showLoginError(msg) {
 const ACCESS_PIN = 'Caja'; // Portal access PIN
 const ADMIN_NAME = 'Cesar'; // Admin name (always has access)
 const OD_FOLDER = 'SaludElena';
-const OD_DATA_PATH = OD_FOLDER; // Files stored directly in SaludElena/
+const OD_DATA_PATH = OD_FOLDER + '/data'; // Files in SaludElena/data/
 const OD_PDFS_PATH = OD_FOLDER + '/PDFs';
 
 // ── Default members (editable in settings) ──
@@ -1115,17 +1118,22 @@ async function odUploadFile(file, safeName) {
 }
 
 async function listOneDriveFiles() {
-  // List all files in SaludElena folder for diagnostics
   const token = await getValidOdToken();
   if (!token) return [];
   try {
-    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_FOLDER + ':/children', {
+    // List files in SaludElena/data/ subfolder
+    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + ':/children?$top=100', {
       headers: {'Authorization': 'Bearer ' + token}
     });
-    if (!r.ok) return [];
+    if (!r.ok) {
+      console.warn('listOneDriveFiles error:', r.status);
+      return [];
+    }
     const d = await r.json();
-    return (d.value || []).map(f => f.name);
-  } catch(e) { return []; }
+    const files = (d.value || []);
+    console.log('OneDrive SaludElena/data/ files:', files.map(f => f.name + ' (' + (f.size||0) + ' bytes)'));
+    return files.map(f => f.name);
+  } catch(e) { console.warn('listOneDriveFiles exception:', e); return []; }
 }
 
 async function loadFromOneDrive() {
@@ -1134,44 +1142,31 @@ async function loadFromOneDrive() {
   console.log('Files in SaludElena:', existingFiles);
 
   // Try both naming conventions (records.json and sf_records.json)
+  // Exact filenames confirmed in SaludElena/data/
   const files = [
-    {key: 'se_records', names: ['records.json', 'sf_records.json'], arr: true},
-    {key: 'se_appts', names: ['appts.json', 'sf_appts.json'], arr: true},
-    {key: 'se_meds', names: ['meds.json', 'sf_meds.json'], arr: true},
-    {key: 'se_docs', names: ['docs.json', 'sf_docs.json'], arr: true},
-    {key: 'se_notes', names: ['notes.json', 'sf_notes.json'], arr: true},
-    {key: 'se_activity', names: ['activity.json', 'sf_activity.json'], arr: true},
-    {key: 'se_medSchedule', names: ['medSchedule.json', 'sf_medSchedule.json'], arr: true},
-    {key: 'se_notifs', names: ['notifs.json', 'sf_notifs.json'], arr: true},
-    {key: 'se_settings', names: ['settings.json', 'sf_settings.json'], arr: false},
+    {key: 'se_records', name: 'records.json'},
+    {key: 'se_appts', name: 'appts.json'},
+    {key: 'se_meds', name: 'meds.json'},
+    {key: 'se_docs', name: 'docs.json'},
+    {key: 'se_notes', name: 'notes.json'},
+    {key: 'se_activity', name: 'activity.json'},
+    {key: 'se_medSchedule', name: 'medSchedule.json'},
+    {key: 'se_notifs', name: 'notifs.json'},
+    {key: 'se_settings', name: 'settings.json'},
   ];
 
   let loaded = 0;
   for (const f of files) {
-    let data = null;
-    // Try each possible filename
-    for (const name of f.names) {
-      if (existingFiles.length > 0 && !existingFiles.includes(name)) continue;
-      data = await odRead(name);
-      if (data !== null) { console.log('Loaded:', name); break; }
+    // Skip if we know the file doesn't exist in OneDrive
+    if (existingFiles.length > 0 && !existingFiles.includes(f.name)) {
+      console.log('Skipping (not in OneDrive):', f.name);
+      continue;
     }
+    const data = await odRead(f.name);
     if (data !== null) {
       localStorage.setItem(f.key, JSON.stringify(data));
       loaded++;
-    }
-  }
-
-  // Also try reading a combined backup file if individual files not found
-  if (loaded === 0) {
-    const backup = await odRead('saludelena_backup.json');
-    if (backup) {
-      if (backup.records) { localStorage.setItem('se_records', JSON.stringify(backup.records)); loaded++; }
-      if (backup.appts) { localStorage.setItem('se_appts', JSON.stringify(backup.appts)); loaded++; }
-      if (backup.meds) { localStorage.setItem('se_meds', JSON.stringify(backup.meds)); loaded++; }
-      if (backup.docs) { localStorage.setItem('se_docs', JSON.stringify(backup.docs)); loaded++; }
-      if (backup.notes) { localStorage.setItem('se_notes', JSON.stringify(backup.notes)); loaded++; }
-      if (backup.settings) { localStorage.setItem('se_settings', JSON.stringify(backup.settings)); loaded++; }
-      console.log('Loaded from backup file');
+      console.log('Loaded:', f.name, Array.isArray(data) ? '(' + data.length + ' items)' : '(object)');
     }
   }
 
@@ -1219,6 +1214,40 @@ function showFamilyCode() {
 function updateTopbarFamilyCode() {
   const el = document.getElementById('topbar-family-code');
   if (el) el.textContent = msUserName || '';
+}
+
+async function pushLocalToOneDrive() {
+  const result = document.getElementById('od-connect-result');
+  if (!await getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
+    toast('Conecta OneDrive primero', 'warning'); return;
+  }
+  if (!confirm('Subir todos los datos locales a OneDrive? Esto sobreescribira los archivos existentes en SaludElena/.')) return;
+  if (result) result.textContent = 'Subiendo datos...';
+  setSyncStatus('syncing');
+  const dataMap = [
+    {key: 'se_records', file: 'records.json'},
+    {key: 'se_appts', file: 'appts.json'},
+    {key: 'se_meds', file: 'meds.json'},
+    {key: 'se_docs', file: 'docs.json'},
+    {key: 'se_notes', file: 'notes.json'},
+    {key: 'se_activity', file: 'activity.json'},
+    {key: 'se_medSchedule', file: 'medSchedule.json'},
+    {key: 'se_notifs', file: 'notifs.json'},
+    {key: 'se_settings', file: 'settings.json'},
+  ];
+  let uploaded = 0;
+  for (const d of dataMap) {
+    const data = localStorage.getItem(d.key);
+    if (data) {
+      try {
+        await odWrite(d.file, JSON.parse(data));
+        uploaded++;
+      } catch(e) { console.warn('Upload error for ' + d.file, e); }
+    }
+  }
+  setSyncStatus('synced');
+  if (result) result.textContent = '✅ ' + uploaded + ' archivos subidos a OneDrive/SaludElena/';
+  toast(uploaded + ' archivos subidos a OneDrive exitosamente');
 }
 
 async function manualSync() {
