@@ -579,9 +579,15 @@
           <button class="btn btn-primary btn-sm" onclick="addMemberCfg()" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Agregar</button>
         </div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
-        <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-cloud"></i> OneDrive</div>
+        <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-cloud"></i> OneDrive — Sincronizacion</div>
         <div id="od-status-cfg" style="font-size:.83rem;margin-bottom:10px;"></div>
-        <button class="btn btn-outline btn-sm" onclick="showAdminSetup()"><i class="fas fa-gear"></i> Configurar OneDrive (admin)</button>
+        <button class="btn btn-primary btn-sm" id="od-connect-settings-btn" onclick="connectOneDriveFromSettings()" style="margin-bottom:8px;width:100%;">
+          <i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="manualSync()" style="width:100%;">
+          <i class="fas fa-rotate"></i> Sincronizar ahora
+        </button>
+        <div id="od-connect-result" style="font-size:.78rem;color:var(--ink2);margin-top:8px;"></div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
         <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-download"></i> Exportar Datos</div>
         <button class="btn btn-outline" onclick="exportData()"><i class="fas fa-file-export"></i> Exportar JSON</button>
@@ -2481,8 +2487,82 @@ function removeMemberCfg(index) {
 }
 
 function showAdminSetup() {
-  // Show admin setup on login screen temporarily
-  toast('Ve a la pantalla de inicio y haz triple clic en el logo para acceder a la configuracion de OneDrive.');
+  connectOneDriveFromSettings();
+}
+
+async function connectOneDriveFromSettings() {
+  const btn = document.getElementById('od-connect-settings-btn');
+  const result = document.getElementById('od-connect-result');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...'; }
+  if (result) result.textContent = '';
+  try {
+    const {verifier, challenge} = await genPKCE();
+    const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
+    localStorage.setItem('se_pkce_v', verifier);
+    localStorage.setItem('se_oauth_s', state);
+    const params = new URLSearchParams({
+      client_id: MS_CLIENT_ID, response_type: 'code',
+      redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
+      code_challenge: challenge, code_challenge_method: 'S256',
+      response_mode: 'query', prompt: 'select_account'
+    });
+    const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + params;
+    const popup = window.open(authUrl, 'od_connect', 'width=520,height=680,left=200,top=80');
+    if (!popup) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive'; }
+      if (result) result.textContent = 'Error: Popup bloqueado. Permite popups para este sitio en la barra de direcciones.';
+      return;
+    }
+    const timer = setInterval(async () => {
+      try {
+        if (popup.closed) {
+          clearInterval(timer);
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+          return;
+        }
+        const url = popup.location.href;
+        if (url.startsWith(MS_REDIRECT) && url.includes('code=')) {
+          clearInterval(timer); popup.close();
+          const urlParams = new URLSearchParams(new URL(url).search);
+          const code = urlParams.get('code');
+          if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
+          if (result) result.textContent = 'Obteniendo token...';
+          const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({
+              client_id: MS_CLIENT_ID, grant_type: 'authorization_code',
+              code, redirect_uri: MS_REDIRECT,
+              code_verifier: localStorage.getItem('se_pkce_v')
+            })
+          });
+          const d = await r.json();
+          if (d.access_token) {
+            setOdToken(d.access_token, d.expires_in);
+            if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
+            if (result) result.textContent = 'Conectado! Buscando archivos en SaludElena...';
+            const files = await listOneDriveFiles();
+            if (result) result.textContent = 'Archivos encontrados: ' + (files.length ? files.join(', ') : 'ninguno');
+            const n = await loadFromOneDrive();
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> OneDrive conectado'; btn.style.background = 'var(--primary)'; }
+            renderDashboard();
+            renderSettingsPage();
+            toast(n > 0 ? '✅ ' + n + ' archivos cargados desde OneDrive!' : '⚠️ OneDrive conectado pero no se encontraron datos en SaludElena/');
+          } else {
+            throw new Error(d.error_description || d.error || 'Error de autenticacion');
+          }
+        }
+      } catch(e) { /* cross-origin, keep waiting */ }
+    }, 500);
+    setTimeout(() => {
+      clearInterval(timer);
+      if (!popup.closed) popup.close();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+    }, 120000);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+    if (result) result.textContent = 'Error: ' + e.message;
+  }
 }
 
 function saveUserName() {
