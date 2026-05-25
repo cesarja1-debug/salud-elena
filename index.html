@@ -1185,19 +1185,36 @@ async function loadFromOneDrive() {
 }
 
 // ── Portal entry ──
-function enterPortal() {
+async function enterPortal() {
   document.getElementById('login-screen').style.display = 'none';
   const name = msUserName || localStorage.getItem('se_user_name') || 'Usuario';
   document.getElementById('user-name').textContent = name;
   document.getElementById('user-avatar').textContent = name.slice(0,2).toUpperCase();
   updateTopbarFamilyCode();
-  // Try to sync from OneDrive on entry
-  loadFromOneDrive().then(n => {
-    if (n > 0) { renderDashboard(); setSyncStatus('synced'); }
-  }).catch(() => {});
-  renderDashboard();
+  renderDashboard(); // Show local data first (instant)
   updateBellBadge();
   renderNotifPanel();
+  // Auto-sync from OneDrive if token available
+  const hasToken = localStorage.getItem('se_od_refresh') || odTokenValid();
+  if (hasToken) {
+    setSyncStatus('syncing');
+    try {
+      const n = await loadFromOneDrive();
+      if (n > 0) {
+        renderDashboard();
+        updateBellBadge();
+        setSyncStatus('synced');
+        if (records.length > 0 || appts.length > 0) {
+          toast('Datos cargados desde OneDrive (' + (records.length) + ' registros, ' + appts.length + ' citas)');
+        }
+      } else {
+        setSyncStatus('synced');
+      }
+    } catch(e) {
+      setSyncStatus('offline');
+      console.warn('Auto-sync error:', e);
+    }
+  }
 }
 
 function logoutFamily() {
@@ -2727,7 +2744,7 @@ if ('caches' in window) {
   const pinOk = localStorage.getItem('se_pin_ok');
   if (pinOk === '1') {
     msUserName = localStorage.getItem('se_user_name') || 'Usuario';
-    enterPortal();
+    enterPortal(); // async - auto-syncs OneDrive
   } else {
     document.getElementById('login-screen').style.display = 'flex';
     populateMemberSelect();
