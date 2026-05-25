@@ -553,7 +553,7 @@
         <div class="card-title" style="margin-bottom:10px;"><i class="fas fa-cloud"></i> OneDrive — Sincronizacion</div>
         <div id="od-status-cfg" style="font-size:.83rem;margin-bottom:10px;"></div>
         <button class="btn btn-primary btn-sm" id="od-connect-settings-btn" onclick="connectOneDriveFromSettings()" style="margin-bottom:8px;width:100%;">
-          <i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)
+          <i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)
         </button>
         <button class="btn btn-outline btn-sm" onclick="manualSync()" style="width:100%;margin-bottom:6px;">
           <i class="fas fa-rotate"></i> Cargar datos desde OneDrive
@@ -996,7 +996,8 @@ async function adminConnectOneDrive() {
       client_id: MS_CLIENT_ID, response_type: 'code',
       redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
       code_challenge: challenge, code_challenge_method: 'S256',
-      response_mode: 'query', prompt: 'select_account'
+      response_mode: 'query', prompt: 'select_account',
+      login_hint: 'CesarJimenez@Cesarja1.onmicrosoft.com'
     });
     const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
     const popup = window.open(authUrl, 'od_admin', 'width=520,height=680,left=200,top=80');
@@ -2525,7 +2526,8 @@ async function connectOneDriveFromSettings() {
       client_id: MS_CLIENT_ID, response_type: 'code',
       redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
       code_challenge: challenge, code_challenge_method: 'S256',
-      response_mode: 'query', prompt: 'select_account'
+      response_mode: 'query', prompt: 'select_account',
+      login_hint: 'CesarJimenez@Cesarja1.onmicrosoft.com'
     });
     const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
     const popup = window.open(authUrl, 'od_connect', 'width=520,height=680,left=200,top=80');
@@ -2538,7 +2540,7 @@ async function connectOneDriveFromSettings() {
       try {
         if (popup.closed) {
           clearInterval(timer);
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
           return;
         }
         const url = popup.location.href;
@@ -2578,10 +2580,10 @@ async function connectOneDriveFromSettings() {
     setTimeout(() => {
       clearInterval(timer);
       if (!popup.closed) popup.close();
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
     }, 120000);
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (cesarja1@hotmail.com)'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
     if (result) result.textContent = 'Error: ' + e.message;
   }
 }
