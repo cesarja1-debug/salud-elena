@@ -334,7 +334,7 @@
 </div>
 <div class="topbar-right">
 <!-- Bell notification button -->
-<div class="sync-status" id="sync-status"><span class="sync-dot synced" id="sync-dot"></span><span id="sync-text">Sincronizado</span></div>
+<div class="sync-status" id="sync-status" onclick="manualSync()" style="cursor:pointer;" title="Clic para sincronizar con OneDrive"><span class="sync-dot synced" id="sync-dot"></span><span id="sync-text">Sincronizado</span></div>
 <button class="bell-btn" onclick="toggleNotifPanel()" title="Notificaciones">
 <i class="fas fa-bell"></i>
 <span class="bell-badge hidden" id="bell-badge">0</span>
@@ -887,7 +887,7 @@ function showLoginError(msg) {
 const ACCESS_PIN = 'Caja'; // Portal access PIN
 const ADMIN_NAME = 'Cesar'; // Admin name (always has access)
 const OD_FOLDER = 'SaludElena';
-const OD_DATA_PATH = OD_FOLDER + '/data';
+const OD_DATA_PATH = OD_FOLDER; // Files stored directly in SaludElena/
 const OD_PDFS_PATH = OD_FOLDER + '/PDFs';
 
 // ── Default members (editable in settings) ──
@@ -1108,26 +1108,67 @@ async function odUploadFile(file, safeName) {
   }
 }
 
+async function listOneDriveFiles() {
+  // List all files in SaludElena folder for diagnostics
+  const token = await getValidOdToken();
+  if (!token) return [];
+  try {
+    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_FOLDER + ':/children', {
+      headers: {'Authorization': 'Bearer ' + token}
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.value || []).map(f => f.name);
+  } catch(e) { return []; }
+}
+
 async function loadFromOneDrive() {
+  // First list what files exist
+  const existingFiles = await listOneDriveFiles();
+  console.log('Files in SaludElena:', existingFiles);
+
+  // Try both naming conventions (records.json and sf_records.json)
   const files = [
-    {key: 'se_records', file: 'records.json', arr: true},
-    {key: 'se_appts', file: 'appts.json', arr: true},
-    {key: 'se_meds', file: 'meds.json', arr: true},
-    {key: 'se_docs', file: 'docs.json', arr: true},
-    {key: 'se_notes', file: 'notes.json', arr: true},
-    {key: 'se_activity', file: 'activity.json', arr: true},
-    {key: 'se_medSchedule', file: 'medSchedule.json', arr: true},
-    {key: 'se_notifs', file: 'notifs.json', arr: true},
-    {key: 'se_settings', file: 'settings.json', arr: false},
+    {key: 'se_records', names: ['records.json', 'sf_records.json'], arr: true},
+    {key: 'se_appts', names: ['appts.json', 'sf_appts.json'], arr: true},
+    {key: 'se_meds', names: ['meds.json', 'sf_meds.json'], arr: true},
+    {key: 'se_docs', names: ['docs.json', 'sf_docs.json'], arr: true},
+    {key: 'se_notes', names: ['notes.json', 'sf_notes.json'], arr: true},
+    {key: 'se_activity', names: ['activity.json', 'sf_activity.json'], arr: true},
+    {key: 'se_medSchedule', names: ['medSchedule.json', 'sf_medSchedule.json'], arr: true},
+    {key: 'se_notifs', names: ['notifs.json', 'sf_notifs.json'], arr: true},
+    {key: 'se_settings', names: ['settings.json', 'sf_settings.json'], arr: false},
   ];
+
   let loaded = 0;
   for (const f of files) {
-    const data = await odRead(f.file);
+    let data = null;
+    // Try each possible filename
+    for (const name of f.names) {
+      if (existingFiles.length > 0 && !existingFiles.includes(name)) continue;
+      data = await odRead(name);
+      if (data !== null) { console.log('Loaded:', name); break; }
+    }
     if (data !== null) {
       localStorage.setItem(f.key, JSON.stringify(data));
       loaded++;
     }
   }
+
+  // Also try reading a combined backup file if individual files not found
+  if (loaded === 0) {
+    const backup = await odRead('saludelena_backup.json');
+    if (backup) {
+      if (backup.records) { localStorage.setItem('se_records', JSON.stringify(backup.records)); loaded++; }
+      if (backup.appts) { localStorage.setItem('se_appts', JSON.stringify(backup.appts)); loaded++; }
+      if (backup.meds) { localStorage.setItem('se_meds', JSON.stringify(backup.meds)); loaded++; }
+      if (backup.docs) { localStorage.setItem('se_docs', JSON.stringify(backup.docs)); loaded++; }
+      if (backup.notes) { localStorage.setItem('se_notes', JSON.stringify(backup.notes)); loaded++; }
+      if (backup.settings) { localStorage.setItem('se_settings', JSON.stringify(backup.settings)); loaded++; }
+      console.log('Loaded from backup file');
+    }
+  }
+
   // Reload in-memory variables
   records = loadLocal('se_records');
   appts = loadLocal('se_appts');
@@ -1138,6 +1179,7 @@ async function loadFromOneDrive() {
   medSchedule = loadLocal('se_medSchedule');
   notifications = loadLocal('se_notifs');
   settings = loadLocalObj('se_settings');
+  console.log('Loaded', loaded, 'files. Records:', records.length, 'Appts:', appts.length);
   return loaded;
 }
 
@@ -1171,6 +1213,23 @@ function showFamilyCode() {
 function updateTopbarFamilyCode() {
   const el = document.getElementById('topbar-family-code');
   if (el) el.textContent = msUserName || '';
+}
+
+async function manualSync() {
+  if (!getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
+    toast('OneDrive no conectado. Usa el admin setup para conectar.', 'warning');
+    return;
+  }
+  setSyncStatus('syncing');
+  try {
+    const n = await loadFromOneDrive();
+    renderDashboard();
+    if (n > 0) { setSyncStatus('synced'); toast('Sincronizado: ' + n + ' archivos cargados desde OneDrive'); }
+    else { setSyncStatus('synced'); toast('Sincronizado (sin cambios nuevos en OneDrive)'); }
+  } catch(e) {
+    setSyncStatus('offline');
+    toast('Error al sincronizar: ' + e.message, 'warning');
+  }
 }
 
 function setSyncStatus(status) {
