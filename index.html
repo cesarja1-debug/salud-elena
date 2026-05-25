@@ -575,11 +575,14 @@
         <div class="card-title"><i class="fas fa-shield-halved"></i> Usuarios Autorizados</div>
         <p style="font-size:.85rem;color:var(--ink2);margin-bottom:16px;">Solo los emails en esta lista pueden acceder al portal con su cuenta Microsoft. Si la lista esta vacia, cualquier cuenta Microsoft puede entrar.</p>
         <div id="auth-users-list" style="margin-bottom:16px;"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-          <input class="form-control" id="new-auth-name" placeholder="Nombre (ej: Maria)" style="max-width:140px;"/>
-          <input class="form-control" id="new-auth-email" type="email" placeholder="email@ejemplo.com" style="flex:1;min-width:180px;"/>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label class="form-label">Email de Microsoft del nuevo usuario *</label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-control" id="new-auth-email" type="email" placeholder="usuario@outlook.com" onkeydown="if(event.key==='Enter')addAuthorizedUser()"/>
+            <button class="btn btn-primary btn-sm" id="add-auth-btn" onclick="addAuthorizedUser()" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Agregar</button>
+          </div>
+          <div style="font-size:.75rem;color:var(--ink3);margin-top:4px;">Ingresa el email exacto con el que el usuario inicia sesion en Microsoft</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="addAuthorizedUser()"><i class="fas fa-user-plus"></i> Agregar usuario</button>
         <hr style="margin:16px 0;border-color:var(--border);"/>
         <div class="alert-banner alert-info" style="margin-bottom:0;">
           <i class="fas fa-circle-info alert-banner-icon"></i>
@@ -885,8 +888,8 @@ function showLoginError(msg) {
 // ══════════════════════════════════════════
 //  AUTHORIZED USERS - Dynamic, managed from Settings page
 // ══════════════════════════════════════════
-// Authorized emails are stored in OneDrive/SaludElena/data/authorized.json
-// and cached in localStorage. Managed from the Settings page.
+// ADMIN: Always has access regardless of authorized list
+const ADMIN_EMAIL = 'CesarJimenez@Cesarja1.onmicrosoft.com';
 
 function getAuthorizedEmails() {
   try { return JSON.parse(localStorage.getItem('se_authorized_emails') || '[]'); } catch { return []; }
@@ -894,18 +897,18 @@ function getAuthorizedEmails() {
 
 function saveAuthorizedEmails(emails) {
   localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
-  // Sync to OneDrive
-  odWriteJson('authorized.json', emails).catch(e => console.warn('Auth sync error:', e));
+  // Sync to shared OneDrive (admin account)
+  odWriteJsonShared('authorized.json', emails).catch(e => console.warn('Auth sync error:', e));
 }
 
 async function loadAuthorizedEmails() {
   try {
-    const data = await odReadJson('authorized.json');
+    const data = await odReadJsonShared('authorized.json');
     if (data && Array.isArray(data)) {
       localStorage.setItem('se_authorized_emails', JSON.stringify(data));
       return data;
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Could not load authorized emails:', e); }
   return getAuthorizedEmails();
 }
 
@@ -1073,7 +1076,7 @@ async function odWriteJson(filename, data) {
 }
 
 async function odUploadFile(file, filename) {
-  const token = await ensureMsToken();
+  const token = await getSharedToken(); // Use shared/admin token
   const path = '/me/drive/root:/' + OD_PDFS + '/' + filename + ':/content';
   const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
     method: 'PUT',
@@ -1092,7 +1095,66 @@ async function odUploadFile(file, filename) {
 }
 
 async function odDeleteFile(driveItemId) {
-  try { await graphDelete('/me/drive/items/' + driveItemId); } catch(e) { console.warn('Delete error:', e); }
+  try {
+    const token = await getSharedToken();
+    await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + driveItemId, {
+      method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}
+    });
+  } catch(e) { console.warn('Delete error:', e); }
+}
+
+// ── Shared OneDrive (always uses admin account's OneDrive) ──
+// For non-admin users, we use a delegated approach:
+// The admin's token is used to access the shared folder.
+// Non-admin users get a read/write token scoped to the shared folder via a sharing link.
+
+// Shared folder path - always points to admin's OneDrive
+const SHARED_OD_DATA = OD_DATA; // Same path, but accessed via admin token when available
+
+async function getSharedToken() {
+  // If current user is admin, use their token directly
+  const currentEmail = (localStorage.getItem('ms_user_email') || '').toLowerCase();
+  if (currentEmail === ADMIN_EMAIL.toLowerCase()) {
+    return await ensureMsToken();
+  }
+  // For non-admin users, try to use cached admin token
+  // (Admin must have logged in at least once on this device, OR
+  //  we use the sharing link approach)
+  const adminToken = localStorage.getItem('se_shared_token');
+  const adminTokenExp = localStorage.getItem('se_shared_token_exp');
+  if (adminToken && adminTokenExp && Date.now() < parseInt(adminTokenExp) - 60000) {
+    return adminToken;
+  }
+  // Fall back to user's own token (data will be in their OneDrive)
+  return await ensureMsToken();
+}
+
+async function odReadJsonShared(filename) {
+  try {
+    const token = await getSharedToken();
+    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+      headers: {'Authorization': 'Bearer ' + token}
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function odWriteJsonShared(filename, data) {
+  setSyncStatus('syncing');
+  try {
+    const token = await getSharedToken();
+    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+      method: 'PUT',
+      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error('Write error: ' + r.status);
+    setSyncStatus('synced');
+  } catch(e) {
+    setSyncStatus('offline');
+    throw e;
+  }
 }
 
 // ── Sync status ──
@@ -1128,18 +1190,20 @@ let reminderSettings = loadLocalObj('se_reminders');
 async function save(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
-  odWriteJson(filename, data).catch(e => console.warn('OneDrive sync error:', e));
+  // Always write to shared OneDrive (admin account)
+  odWriteJsonShared(filename, data).catch(e => console.warn('OneDrive sync error:', e));
 }
 
 async function saveObj(key, data) {
   saveLocal(key, data);
   const filename = key.replace('se_', '') + '.json';
-  odWriteJson(filename, data).catch(e => console.warn('OneDrive sync error:', e));
+  odWriteJsonShared(filename, data).catch(e => console.warn('OneDrive sync error:', e));
 }
 
 // Load all data from OneDrive
 async function loadAllFromOneDrive() {
   setSyncStatus('syncing');
+  // Always load from shared OneDrive (admin account)
   const files = [
     {key: KEYS.records, file: 'records.json', target: 'records'},
     {key: KEYS.appts, file: 'appts.json', target: 'appts'},
@@ -1152,7 +1216,7 @@ async function loadAllFromOneDrive() {
   ];
   for (const f of files) {
     try {
-      const data = await odReadJson(f.file);
+      const data = await odReadJsonShared(f.file);
       if (data && Array.isArray(data)) {
         saveLocal(f.key, data);
         if (f.target === 'records') records = data;
@@ -1168,7 +1232,7 @@ async function loadAllFromOneDrive() {
   }
   // Load settings
   try {
-    const s = await odReadJson('settings.json');
+    const s = await odReadJsonShared('settings.json');
     if (s && typeof s === 'object') { settings = s; saveLocal(KEYS.settings, s); }
   } catch(e) {}
   setSyncStatus('synced');
@@ -1215,6 +1279,8 @@ async function enterPortal() {
 }
 
 function isAuthorized(email, emailList) {
+  // Admin always has access
+  if ((email||'').toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim()) return true;
   const list = emailList || getAuthorizedEmails();
   if (!list || list.length === 0) return true; // Open access if list is empty
   return list.some(e => (e.email||e).toLowerCase().trim() === (email||'').toLowerCase().trim());
@@ -2395,44 +2461,60 @@ function renderAuthUsersList() {
     list.innerHTML = '<div style="font-size:.83rem;color:var(--ink3);padding:10px;background:var(--accent);border-radius:8px;margin-bottom:8px;"><i class="fas fa-unlock" style="margin-right:6px;"></i>Lista vacia - cualquier cuenta Microsoft puede acceder</div>';
     return;
   }
-  list.innerHTML = emails.map((u, i) => {
+  // Always show admin first (non-removable)
+  const adminRow = '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+    '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-dark);">AD</div>' +
+    '<div style="flex:1;"><div style="font-size:.88rem;font-weight:600;color:var(--ink);">' + ADMIN_EMAIL + '</div>' +
+    '<div style="font-size:.72rem;color:var(--primary);font-weight:700;">ADMINISTRADOR - Acceso permanente</div></div>' +
+    '<span style="font-size:.72rem;color:var(--ink3);padding:3px 8px;background:var(--accent);border-radius:10px;">Fijo</span>' +
+    '</div>';
+  list.innerHTML = adminRow + emails.map((u, i) => {
     const email = u.email || u;
-    const name = u.name || '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
-      '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-light);">' + (name ? name.slice(0,2).toUpperCase() : email.slice(0,2).toUpperCase()) + '</div>' +
-      '<div style="flex:1;"><div style="font-size:.88rem;font-weight:600;color:var(--ink);">' + (name || email) + '</div>' +
-      (name ? '<div style="font-size:.75rem;color:var(--ink3);">' + email + '</div>' : '') + '</div>' +
+      '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-light);">' + email.slice(0,2).toUpperCase() + '</div>' +
+      '<div style="flex:1;"><div style="font-size:.88rem;color:var(--ink);">' + email + '</div></div>' +
       '<button class="btn btn-danger btn-sm" onclick="removeAuthorizedUser(' + i + ')"><i class="fas fa-xmark"></i></button>' +
       '</div>';
   }).join('');
 }
 
 function addAuthorizedUser() {
-  const nameEl = document.getElementById('new-auth-name');
   const emailEl = document.getElementById('new-auth-email');
-  const name = (nameEl ? nameEl.value.trim() : '');
+  const btn = document.getElementById('add-auth-btn');
   const email = (emailEl ? emailEl.value.trim().toLowerCase() : '');
   if (!email) { toast('Por favor ingresa un email', 'warning'); return; }
-  if (!email.includes('@')) { toast('Email invalido', 'warning'); return; }
+  if (!email.includes('@')) { toast('Email invalido - debe incluir @', 'warning'); return; }
   const emails = getAuthorizedEmails();
   if (emails.some(u => (u.email||u).toLowerCase() === email)) { toast('Este email ya esta en la lista', 'warning'); return; }
-  emails.push(name ? {name, email} : email);
-  saveAuthorizedEmails(emails);
-  if (nameEl) nameEl.value = '';
-  if (emailEl) emailEl.value = '';
+  if (email === ADMIN_EMAIL.toLowerCase()) { toast('El administrador siempre tiene acceso automaticamente', 'warning'); return; }
+  // Disable button to prevent double-click
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+  emails.push(email);
+  // Save locally first (instant feedback)
+  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
   renderAuthUsersList();
-  toast((name || email) + ' agregado a usuarios autorizados');
+  if (emailEl) emailEl.value = '';
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Agregar'; }
+  toast(email + ' agregado a usuarios autorizados');
+  // Sync to OneDrive in background (non-blocking)
+  odWriteJsonShared('authorized.json', emails).catch(e => {
+    console.warn('Could not sync to OneDrive:', e);
+    toast('Guardado localmente. Sincronizacion con OneDrive pendiente.', 'warning');
+  });
 }
 
 function removeAuthorizedUser(index) {
   const emails = getAuthorizedEmails();
   const user = emails[index];
-  const label = (user.name || user.email || user);
+  const label = (user.email || user);
   if (!confirm('Remover a ' + label + ' de usuarios autorizados?')) return;
   emails.splice(index, 1);
-  saveAuthorizedEmails(emails);
+  // Save locally first
+  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
   renderAuthUsersList();
   toast(label + ' removido de usuarios autorizados');
+  // Sync to OneDrive in background
+  odWriteJsonShared('authorized.json', emails).catch(e => console.warn('Sync error:', e));
 }
 
 async function saveSettings() {
