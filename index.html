@@ -961,9 +961,13 @@ function showLoginError(msg) {
 }
 
 // ── OneDrive OAuth for admin ──
-const MS_CLIENT_ID = 'ab8f4b4b-7c4e-4f3a-b6e5-8c9d2e1f0a3b'; // Microsoft personal OneDrive client
-const MS_REDIRECT = window.location.origin + window.location.pathname;
-const MS_SCOPES = 'Files.ReadWrite offline_access User.Read';
+// Microsoft OAuth for personal accounts
+// Using Microsoft's public client ID for personal OneDrive access
+const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c'; // Salud Elena app - Cesarja1 tenant
+// Redirect URI - must match exactly what's registered in Azure
+// Registered: https://cesarja1-debug.github.io/salud-elena/
+const MS_REDIRECT = window.location.origin + window.location.pathname.replace(/\/?$/, '/');
+const MS_SCOPES = 'Files.ReadWrite offline_access User.Read Sites.ReadWrite.All';
 
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
@@ -987,7 +991,7 @@ async function refreshOdToken() {
   const rt = localStorage.getItem('se_od_refresh');
   if (!rt) return false;
   try {
-    const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+    const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({client_id: MS_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: MS_SCOPES})
@@ -1023,7 +1027,7 @@ async function adminConnectOneDrive() {
       code_challenge: challenge, code_challenge_method: 'S256',
       response_mode: 'query', prompt: 'select_account'
     });
-    const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + params;
+    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
     const popup = window.open(authUrl, 'od_admin', 'width=520,height=680,left=200,top=80');
     if (!popup) { throw new Error('Popup bloqueado. Permite popups para este sitio.'); }
     const timer = setInterval(async () => {
@@ -1035,7 +1039,7 @@ async function adminConnectOneDrive() {
           const urlParams = new URLSearchParams(new URL(url).search);
           const code = urlParams.get('code');
           if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
-          const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: new URLSearchParams({
@@ -2552,7 +2556,7 @@ async function connectOneDriveFromSettings() {
       code_challenge: challenge, code_challenge_method: 'S256',
       response_mode: 'query', prompt: 'select_account'
     });
-    const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + params;
+    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
     const popup = window.open(authUrl, 'od_connect', 'width=520,height=680,left=200,top=80');
     if (!popup) {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive'; }
@@ -2573,7 +2577,7 @@ async function connectOneDriveFromSettings() {
           const code = urlParams.get('code');
           if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
           if (result) result.textContent = 'Obteniendo token...';
-          const r = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: new URLSearchParams({
