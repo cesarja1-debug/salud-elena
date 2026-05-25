@@ -13,7 +13,6 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&amp;family=Raleway:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
-<!-- Microsoft Graph API - OAuth2 PKCE, no external libraries needed -->
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   :root{
@@ -853,66 +852,47 @@
 </div>
 <script>
 // ══════════════════════════════════════════
-//  SALUD ELENA - OneDrive/Microsoft Graph
-//  No Firebase. All data in OneDrive JSON files.
+//  SALUD ELENA — Portal de Salud Familiar
+//  Version limpia: PIN + OneDrive personal
+//  Sin Firebase. Sin dependencias externas.
 // ══════════════════════════════════════════
 
-function showLoginError(msg) {
-  const e = document.getElementById('login-error');
-  if (e) { e.textContent = msg; e.style.display = 'block'; }
-}
-
-// ══════════════════════════════════════════
-//  AUTH SYSTEM - Name + PIN + OneDrive sync
-// ══════════════════════════════════════════
-
-// ── Config ──
-const ACCESS_PIN = 'Caja'; // Portal access PIN
-const ADMIN_NAME = 'Cesar'; // Admin name (always has access)
-const OD_FOLDER = 'SaludElena';
-const OD_DATA_PATH = OD_FOLDER + '/data'; // Files in SaludElena/data/
-const OD_PDFS_PATH = OD_FOLDER + '/PDFs';
-
-// ── Default members (editable in settings) ──
+// ── Configuracion ──
+const ACCESS_PIN = 'Caja';
+const ADMIN_NAME = 'Cesar';
 const DEFAULT_MEMBERS = ['Fernando', 'Daniel', 'John', 'Cesar'];
+const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c';
+const MS_SCOPES = 'Files.ReadWrite offline_access User.Read Sites.ReadWrite.All';
+const OD_FOLDER = 'SaludElena';
+const OD_DATA = OD_FOLDER + '/data';
+const OD_PDFS = OD_FOLDER + '/PDFs';
 
+// Token embebido por el admin (evita que la familia tenga que conectar OneDrive)
+// Despues de conectar OneDrive, usa "Compartir acceso" para obtener este token
+const EMBEDDED_REFRESH_TOKEN = ''; // <- Admin: pega aqui el refresh token
+
+// ── Miembros ──
 function getMembers() {
   try {
     const m = JSON.parse(localStorage.getItem('se_members') || 'null');
-    return m && m.length ? m : [...DEFAULT_MEMBERS];
+    return (m && m.length) ? m : [...DEFAULT_MEMBERS];
   } catch { return [...DEFAULT_MEMBERS]; }
 }
+function saveMembers(m) { localStorage.setItem('se_members', JSON.stringify(m)); }
 
-function saveMembers(members) {
-  localStorage.setItem('se_members', JSON.stringify(members));
-}
-
+// ── Login ──
 function populateMemberSelect() {
   const sel = document.getElementById('member-select');
   if (!sel) return;
   const members = getMembers();
   const saved = localStorage.getItem('se_last_member') || '';
-  let opts = '<option value="">— Selecciona tu nombre —</option>';
-  members.forEach(m => {
-    opts += '<option value="' + m + '"' + (m === saved ? ' selected' : '') + '>' + m + '</option>';
+  let html = '<option value="">— Selecciona tu nombre —</option>';
+  members.forEach(function(m) {
+    html += '<option value="' + m + '"' + (m === saved ? ' selected' : '') + '>' + m + '</option>';
   });
-  sel.innerHTML = opts;
+  sel.innerHTML = html;
 }
 
-// ── Logo triple-click to show admin setup ──
-let logoClickCount = 0, logoClickTimer = null;
-function logoClick() {
-  logoClickCount++;
-  if (logoClickTimer) clearTimeout(logoClickTimer);
-  logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 1000);
-  if (logoClickCount >= 3) {
-    logoClickCount = 0;
-    const area = document.getElementById('admin-setup-area');
-    if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
-  }
-}
-
-// ── PIN submit ──
 function submitPin() {
   const sel = document.getElementById('member-select');
   const pinEl = document.getElementById('pin-input');
@@ -937,351 +917,379 @@ function showLoginError(msg) {
   if (e) { e.textContent = msg; e.style.display = 'block'; }
 }
 
-// ── OneDrive OAuth for admin ──
-// Microsoft OAuth for personal accounts
-const MS_CLIENT_ID = '8f1efd10-665c-46c3-85b3-f6f0a1f2b70c'; // Salud Elena app - Cesarja1 tenant
-
-// ── Embedded refresh token (set by admin, works on all devices) ──
-// After admin connects OneDrive, click "Compartir acceso con familia"
-// to get instructions on embedding the token here.
-const EMBEDDED_REFRESH_TOKEN = ''; // ← Admin fills this after connecting
-// Redirect URI - must match exactly what's registered in Azure
-// Registered: https://cesarja1-debug.github.io/salud-elena/
-const MS_REDIRECT = window.location.origin + window.location.pathname.replace(/\/?$/, '/');
-const MS_SCOPES = 'Files.ReadWrite offline_access User.Read Sites.ReadWrite.All';
-
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+// ── Logo triple-click para admin setup ──
+let _logoClicks = 0, _logoTimer = null;
+function logoClick() {
+  _logoClicks++;
+  if (_logoTimer) clearTimeout(_logoTimer);
+  _logoTimer = setTimeout(function() { _logoClicks = 0; }, 1000);
+  if (_logoClicks >= 3) {
+    _logoClicks = 0;
+    const area = document.getElementById('admin-setup-area');
+    if (area) area.style.display = (area.style.display === 'none' ? 'block' : 'none');
+  }
 }
 
-void 0;
+// ══════════════════════════════════════════
+//  ONEDRIVE / MICROSOFT GRAPH
+// ══════════════════════════════════════════
 
-const genPKCE = async function() {
+const MS_REDIRECT = window.location.origin + window.location.pathname.replace(/\/?$/, '/');
+
+function b64url(buf) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function genPKCE() {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-  return {verifier, challenge};
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+    .then(function(hash) { return { verifier: verifier, challenge: b64url(hash) }; });
 }
 
 function getOdToken() { return localStorage.getItem('se_od_token'); }
-function getOdTokenExp() { return parseInt(localStorage.getItem('se_od_token_exp') || '0'); }
 function setOdToken(t, exp) {
   localStorage.setItem('se_od_token', t);
-  localStorage.setItem('se_od_token_exp', Date.now() + exp * 1000);
+  localStorage.setItem('se_od_token_exp', String(Date.now() + exp * 1000));
+}
+function odTokenValid() {
+  const exp = localStorage.getItem('se_od_token_exp');
+  return !!(exp && Date.now() < parseInt(exp) - 60000);
 }
 
-// Show admin how to embed token for all devices
-function embedTokenInPortal() {
-  const rt = localStorage.getItem('se_od_refresh');
-  if (!rt) { toast('Primero conecta OneDrive con tu cuenta de administrador.', 'warning'); return; }
-  const result = document.getElementById('od-connect-result');
-  if (result) {
-    result.style.cssText = 'background:#f3e8ff;border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-top:8px;font-size:.78rem;';
-    result.innerHTML = '';
-    const title = document.createElement('div');
-    title.style.cssText = 'font-weight:700;color:#6d28d9;margin-bottom:8px;';
-    title.textContent = 'Token para compartir con familia';
-    const desc = document.createElement('div');
-    desc.style.cssText = 'color:var(--ink2);margin-bottom:8px;';
-    desc.textContent = 'Copia este token y pegalo en EMBEDDED_REFRESH_TOKEN en el index.html';
-    const ta = document.createElement('textarea');
-    ta.style.cssText = 'width:100%;height:70px;font-size:.65rem;font-family:monospace;border:1px solid #8b5cf6;border-radius:4px;padding:6px;resize:none;';
-    ta.readOnly = true;
-    ta.value = rt;
-    ta.onclick = function() { this.select(); };
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'btn btn-primary btn-sm';
-    copyBtn.style.cssText = 'margin-top:8px;background:#8b5cf6;border:none;';
-    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar token';
-    copyBtn.onclick = copyEmbedToken;
-    result.appendChild(title);
-    result.appendChild(desc);
-    result.appendChild(ta);
-    result.appendChild(copyBtn);
-  }
-}
-function copyEmbedToken() {
-  const rt = localStorage.getItem('se_od_refresh');
-  if (rt) {
-    navigator.clipboard.writeText(rt).then(() => toast('Token copiado! Pegalo en EMBEDDED_REFRESH_TOKEN en el index.html'));
-  }
-}
-
-// Save refresh token to OneDrive so all devices can use it
-async function saveSharedToken(refreshToken) {
-  try {
-    const tokenData = {
-      refresh_token: refreshToken,
-      saved_at: new Date().toISOString(),
-      saved_by: localStorage.getItem('se_user_name') || 'admin'
-    };
-    // Use current access token to save the shared token file
-    const token = getOdToken();
-    if (!token) return;
-    await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/auth.json:/content', {
-      method: 'PUT',
-      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-      body: JSON.stringify(tokenData)
-    });
-    console.log('Shared token saved to OneDrive');
-  } catch(e) { console.warn('Could not save shared token:', e); }
-}
-
-// Load shared token from OneDrive (for devices without a local token)
-async function loadSharedToken() {
-  try {
-    // Try to get token using a temporary approach - fetch the auth.json
-    // We need a token to read OneDrive, but we don't have one yet
-    // Solution: use the refresh token if we have it locally
-    const localRefresh = localStorage.getItem('se_od_refresh');
-    if (localRefresh) return false; // Already have local token, no need to load shared
-    
-    // If no local token, we can't load from OneDrive without auth
-    // The admin must reconnect - but we show a clear message
-    return false;
-  } catch(e) { return false; }
-}
-function odTokenValid() { return getOdToken() && Date.now() < getOdTokenExp() - 60000; };
-
-const refreshOdToken = async function() {
-  const rt = localStorage.getItem('se_od_refresh');
-  if (!rt) return false;
-  try {
-    const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({client_id: MS_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: MS_SCOPES})
-    });
-    const d = await r.json();
+function refreshOdToken() {
+  const rt = localStorage.getItem('se_od_refresh') || EMBEDDED_REFRESH_TOKEN;
+  if (!rt) return Promise.resolve(false);
+  return fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: MS_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: MS_SCOPES })
+  }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.access_token) {
       setOdToken(d.access_token, d.expires_in);
       if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
       return true;
     }
-  } catch(e) { console.warn('Token refresh error:', e); }
-  return false;
-};
+    return false;
+  }).catch(function() { return false; });
+}
 
-const getValidOdToken = async function() {
-  if (odTokenValid()) return getOdToken();
-  if (await refreshOdToken()) return getOdToken();
-  // Try embedded refresh token (set by admin for all devices)
-  if (EMBEDDED_REFRESH_TOKEN && EMBEDDED_REFRESH_TOKEN !== '') {
-    const saved = localStorage.getItem('se_od_refresh');
-    if (!saved || saved !== EMBEDDED_REFRESH_TOKEN) {
-      localStorage.setItem('se_od_refresh', EMBEDDED_REFRESH_TOKEN);
-    }
-    if (await refreshOdToken()) return getOdToken();
+function getValidOdToken() {
+  if (odTokenValid()) return Promise.resolve(getOdToken());
+  // Try embedded token first
+  if (EMBEDDED_REFRESH_TOKEN && !localStorage.getItem('se_od_refresh')) {
+    localStorage.setItem('se_od_refresh', EMBEDDED_REFRESH_TOKEN);
   }
-  return null; // No valid token - offline mode
-};
+  return refreshOdToken().then(function(ok) { return ok ? getOdToken() : null; });
+}
 
-const adminConnectOneDrive = async function() {
-  const btn = document.getElementById('admin-connect-btn');
-  const status = document.getElementById('admin-status');
-  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
-  try {
-    const {verifier, challenge} = await genPKCE();
+function odRead(filename) {
+  return getValidOdToken().then(function(token) {
+    if (!token) return null;
+    return fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(function(r) {
+      if (!r.ok) return null;
+      return r.json();
+    }).catch(function() { return null; });
+  });
+}
+
+function odWrite(filename, data) {
+  return getValidOdToken().then(function(token) {
+    if (!token) return;
+    setSyncStatus('syncing');
+    return fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + '/' + filename + ':/content', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(function() { setSyncStatus('synced'); })
+      .catch(function() { setSyncStatus('offline'); });
+  });
+}
+
+function odUploadFile(file, safeName) {
+  return getValidOdToken().then(function(token) {
+    if (!token) throw new Error('OneDrive no conectado. El admin debe conectar OneDrive primero.');
+    return fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_PDFS + '/' + safeName + ':/content', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': file.type || 'application/pdf' },
+      body: file
+    }).then(function(r) {
+      if (!r.ok) throw new Error('Upload error: ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      return fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + data.id + '/createLink', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'view', scope: 'anonymous' })
+      }).then(function(r) { return r.json(); }).then(function(sd) {
+        return { url: (sd.link && sd.link.webUrl) || data.webUrl, name: file.name, driveItemId: data.id };
+      });
+    });
+  });
+}
+
+function listOneDriveFiles() {
+  return getValidOdToken().then(function(token) {
+    if (!token) return [];
+    return fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA + ':/children?$top=100', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(function(r) {
+      if (!r.ok) return [];
+      return r.json().then(function(d) { return (d.value || []).map(function(f) { return f.name; }); });
+    }).catch(function() { return []; });
+  });
+}
+
+function loadFromOneDrive() {
+  const files = [
+    { key: 'se_records', name: 'records.json' },
+    { key: 'se_appts', name: 'appts.json' },
+    { key: 'se_meds', name: 'meds.json' },
+    { key: 'se_docs', name: 'docs.json' },
+    { key: 'se_notes', name: 'notes.json' },
+    { key: 'se_activity', name: 'activity.json' },
+    { key: 'se_medSchedule', name: 'medSchedule.json' },
+    { key: 'se_notifs', name: 'notifs.json' },
+    { key: 'se_settings', name: 'settings.json' }
+  ];
+  return listOneDriveFiles().then(function(existing) {
+    const promises = files.map(function(f) {
+      if (existing.length > 0 && existing.indexOf(f.name) < 0) return Promise.resolve(0);
+      return odRead(f.name).then(function(data) {
+        if (data !== null) { localStorage.setItem(f.key, JSON.stringify(data)); return 1; }
+        return 0;
+      });
+    });
+    return Promise.all(promises).then(function(results) {
+      const loaded = results.reduce(function(a, b) { return a + b; }, 0);
+      // Reload in-memory
+      records = loadLocal('se_records');
+      appts = loadLocal('se_appts');
+      meds = loadLocal('se_meds');
+      docs = loadLocal('se_docs');
+      notes = loadLocal('se_notes');
+      activity = loadLocal('se_activity');
+      medSchedule = loadLocal('se_medSchedule');
+      notifications = loadLocal('se_notifs');
+      settings = loadLocalObj('se_settings');
+      return loaded;
+    });
+  });
+}
+
+function pushLocalToOneDrive() {
+  const result = document.getElementById('od-connect-result');
+  if (!confirm('Subir todos los datos locales a OneDrive? Esto sobreescribira los archivos existentes.')) return;
+  if (result) result.textContent = 'Subiendo datos...';
+  setSyncStatus('syncing');
+  const dataMap = [
+    { key: 'se_records', file: 'records.json' }, { key: 'se_appts', file: 'appts.json' },
+    { key: 'se_meds', file: 'meds.json' }, { key: 'se_docs', file: 'docs.json' },
+    { key: 'se_notes', file: 'notes.json' }, { key: 'se_activity', file: 'activity.json' },
+    { key: 'se_medSchedule', file: 'medSchedule.json' }, { key: 'se_notifs', file: 'notifs.json' },
+    { key: 'se_settings', file: 'settings.json' }
+  ];
+  let uploaded = 0;
+  const promises = dataMap.map(function(d) {
+    const raw = localStorage.getItem(d.key);
+    if (!raw) return Promise.resolve();
+    return odWrite(d.file, JSON.parse(raw)).then(function() { uploaded++; });
+  });
+  Promise.all(promises).then(function() {
+    setSyncStatus('synced');
+    if (result) result.textContent = '✅ ' + uploaded + ' archivos subidos a OneDrive/SaludElena/data/';
+    toast(uploaded + ' archivos subidos a OneDrive');
+  });
+}
+
+function manualSync() {
+  setSyncStatus('syncing');
+  loadFromOneDrive().then(function(n) {
+    renderDashboard();
+    setSyncStatus('synced');
+    toast(n > 0 ? 'Sincronizado: ' + n + ' archivos cargados' : 'Sincronizado (sin cambios)');
+  }).catch(function(e) {
+    setSyncStatus('offline');
+    toast('Error al sincronizar: ' + e.message, 'warning');
+  });
+}
+
+// ── Admin: Connect OneDrive ──
+function connectOneDriveFromSettings() {
+  const btn = document.getElementById('od-connect-settings-btn');
+  const result = document.getElementById('od-connect-result');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...'; }
+  if (result) result.textContent = '';
+  genPKCE().then(function(pkce) {
     const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
-    localStorage.setItem('se_pkce_v', verifier);
+    localStorage.setItem('se_pkce_v', pkce.verifier);
     localStorage.setItem('se_oauth_s', state);
     const params = new URLSearchParams({
-      client_id: MS_CLIENT_ID, response_type: 'code',
-      redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
-      code_challenge: challenge, code_challenge_method: 'S256',
-      response_mode: 'query', prompt: 'select_account',
+      client_id: MS_CLIENT_ID, response_type: 'code', redirect_uri: MS_REDIRECT,
+      scope: MS_SCOPES, state: state, code_challenge: pkce.challenge,
+      code_challenge_method: 'S256', response_mode: 'query', prompt: 'select_account',
       login_hint: 'CesarJimenez@Cesarja1.onmicrosoft.com'
     });
-    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
-    const popup = window.open(authUrl, 'od_admin', 'width=520,height=680,left=200,top=80');
-    if (!popup) { throw new Error('Popup bloqueado. Permite popups para este sitio.'); }
-    const timer = setInterval(async () => {
+    const popup = window.open('https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params,
+      'od_connect', 'width=520,height=680,left=200,top=80');
+    if (!popup) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive'; }
+      if (result) result.textContent = 'Error: Popup bloqueado. Permite popups para este sitio.';
+      return;
+    }
+    const timer = setInterval(function() {
       try {
-        if (popup.closed) { clearInterval(timer); if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; } return; }
+        if (popup.closed) { clearInterval(timer); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; } return; }
         const url = popup.location.href;
-        if (url.startsWith(MS_REDIRECT) && url.includes('code=')) {
+        if (url.startsWith(MS_REDIRECT) && url.indexOf('code=') >= 0) {
           clearInterval(timer); popup.close();
           const urlParams = new URLSearchParams(new URL(url).search);
           const code = urlParams.get('code');
-          if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
-          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+          if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { if (result) result.textContent = 'Error: State mismatch'; return; }
+          if (result) result.textContent = 'Obteniendo token...';
+          fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({
-              client_id: MS_CLIENT_ID, grant_type: 'authorization_code',
-              code, redirect_uri: MS_REDIRECT,
-              code_verifier: localStorage.getItem('se_pkce_v')
-            })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: MS_CLIENT_ID, grant_type: 'authorization_code', code: code, redirect_uri: MS_REDIRECT, code_verifier: localStorage.getItem('se_pkce_v') })
+          }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.access_token) {
+              setOdToken(d.access_token, d.expires_in);
+              if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
+              if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> OneDrive conectado'; btn.style.background = 'var(--primary)'; }
+              listOneDriveFiles().then(function(files) {
+                if (result) result.textContent = 'Conectado! Archivos en SaludElena/data/: ' + (files.length ? files.join(', ') : 'ninguno');
+              });
+              loadFromOneDrive().then(function(n) {
+                renderDashboard();
+                renderSettingsPage();
+                toast(n > 0 ? '✅ ' + n + ' archivos cargados desde OneDrive!' : '⚠️ OneDrive conectado pero sin datos en SaludElena/data/');
+              });
+            } else {
+              if (result) result.textContent = 'Error: ' + (d.error_description || d.error || 'Token error');
+              if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
+            }
           });
-          const d = await r.json();
-          if (d.access_token) {
-            setOdToken(d.access_token, d.expires_in);
-            if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
-            if (status) status.textContent = '✅ OneDrive conectado! Los datos se sincronizaran automaticamente.';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> OneDrive conectado'; btn.style.color = 'var(--primary)'; }
-            // Load existing data from OneDrive
-            await loadFromOneDrive();
-            toast('OneDrive conectado! Datos cargados desde SaludElena.');
-          } else {
-            throw new Error(d.error_description || 'Error de token');
-          }
         }
       } catch(e) { /* cross-origin, keep waiting */ }
     }, 500);
-    setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; } }, 120000);
-  } catch(e) {
-    if (status) status.textContent = '❌ Error: ' + e.message;
-    if (btn) { btn.disabled = false; btn.textContent = 'Conectar OneDrive (solo admin)'; }
-  }
-}
-
-// ── OneDrive read/write ──
-async function odRead(filename) {
-  const token = await getValidOdToken();
-  if (!token) return null;
-  try {
-    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/' + filename + ':/content', {
-      headers: {'Authorization': 'Bearer ' + token}
-    });
-    if (r.status === 404) return null;
-    if (!r.ok) return null;
-    return await r.json();
-  } catch(e) { return null; }
-};
-
-const odWrite = async function(filename, data) {
-  const token = await getValidOdToken();
-  if (!token) return; // Offline - data stays in localStorage
-  try {
-    setSyncStatus('syncing');
-    await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + '/' + filename + ':/content', {
-      method: 'PUT',
-      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-      body: JSON.stringify(data)
-    });
-    setSyncStatus('synced');
-  } catch(e) { setSyncStatus('offline'); }
-};
-
-const odUploadFile = async function(file, safeName) {
-  const token = await getValidOdToken();
-  if (!token) throw new Error('OneDrive no conectado. El admin debe conectar OneDrive primero.');
-  const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_PDFS_PATH + '/' + safeName + ':/content', {
-    method: 'PUT',
-    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': file.type || 'application/pdf'},
-    body: file
+    setTimeout(function() { clearInterval(timer); if (!popup.closed) popup.close(); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; } }, 120000);
   });
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error('Upload error: ' + (e.error?.message || r.status)); }
-  const data = await r.json();
-  try {
-    const share = await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + data.id + '/createLink', {
-      method: 'POST',
-      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-      body: JSON.stringify({type: 'view', scope: 'anonymous'})
-    });
-    const sd = await share.json();
-    return {url: sd.link?.webUrl || data.webUrl, name: file.name, driveItemId: data.id};
-  } catch(e) {
-    return {url: data.webUrl, name: file.name, driveItemId: data.id};
-  }
-};
-
-const listOneDriveFiles = async function() {
-  const token = await getValidOdToken();
-  if (!token) return [];
-  try {
-    // List files in SaludElena/data/ subfolder
-    const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + OD_DATA_PATH + ':/children?$top=100', {
-      headers: {'Authorization': 'Bearer ' + token}
-    });
-    if (!r.ok) {
-      console.warn('listOneDriveFiles error:', r.status);
-      return [];
-    }
-    const d = await r.json();
-    const files = (d.value || []);
-    console.log('OneDrive SaludElena/data/ files:', files.map(f => f.name + ' (' + (f.size||0) + ' bytes)'));
-    return files.map(f => f.name);
-  } catch(e) { console.warn('listOneDriveFiles exception:', e); return []; }
-};
-
-const loadFromOneDrive = async function() {
-  // First list what files exist
-  const existingFiles = await listOneDriveFiles();
-  console.log('Files in SaludElena:', existingFiles);
-
-  // Try both naming conventions (records.json and sf_records.json)
-  // Exact filenames confirmed in SaludElena/data/
-  const files = [
-    {key: 'se_records', name: 'records.json'},
-    {key: 'se_appts', name: 'appts.json'},
-    {key: 'se_meds', name: 'meds.json'},
-    {key: 'se_docs', name: 'docs.json'},
-    {key: 'se_notes', name: 'notes.json'},
-    {key: 'se_activity', name: 'activity.json'},
-    {key: 'se_medSchedule', name: 'medSchedule.json'},
-    {key: 'se_notifs', name: 'notifs.json'},
-    {key: 'se_settings', name: 'settings.json'},
-  ];
-
-  let loaded = 0;
-  for (const f of files) {
-    // Skip if we know the file doesn't exist in OneDrive
-    if (existingFiles.length > 0 && !existingFiles.includes(f.name)) {
-      console.log('Skipping (not in OneDrive):', f.name);
-      continue;
-    }
-    const data = await odRead(f.name);
-    if (data !== null) {
-      localStorage.setItem(f.key, JSON.stringify(data));
-      loaded++;
-      console.log('Loaded:', f.name, Array.isArray(data) ? '(' + data.length + ' items)' : '(object)');
-    }
-  }
-
-  // Reload in-memory variables
-  records = loadLocal('se_records');
-  appts = loadLocal('se_appts');
-  meds = loadLocal('se_meds');
-  docs = loadLocal('se_docs');
-  notes = loadLocal('se_notes');
-  activity = loadLocal('se_activity');
-  medSchedule = loadLocal('se_medSchedule');
-  notifications = loadLocal('se_notifs');
-  settings = loadLocalObj('se_settings');
-  console.log('Loaded', loaded, 'files. Records:', records.length, 'Appts:', appts.length);
-  return loaded;
 }
 
-// ── Portal entry ──
-async function enterPortal() {
+// ── Admin: Share token with family ──
+function embedTokenInPortal() {
+  const rt = localStorage.getItem('se_od_refresh');
+  if (!rt) { toast('Primero conecta OneDrive con tu cuenta de administrador.', 'warning'); return; }
+  const result = document.getElementById('od-connect-result');
+  if (!result) return;
+  result.style.cssText = 'background:#f3e8ff;border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-top:8px;';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:700;color:#6d28d9;margin-bottom:8px;font-size:.88rem;';
+  title.innerHTML = '<i class="fas fa-key"></i> Token para compartir con familia';
+  const desc = document.createElement('div');
+  desc.style.cssText = 'font-size:.78rem;color:var(--ink2);margin-bottom:8px;';
+  desc.textContent = 'Copia este token y pegalo en EMBEDDED_REFRESH_TOKEN en el index.html. Luego sube el archivo a GitHub.';
+  const ta = document.createElement('textarea');
+  ta.style.cssText = 'width:100%;height:70px;font-size:.65rem;font-family:monospace;border:1px solid #8b5cf6;border-radius:4px;padding:6px;resize:none;box-sizing:border-box;';
+  ta.readOnly = true;
+  ta.value = rt;
+  ta.addEventListener('click', function() { this.select(); });
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn btn-primary btn-sm';
+  copyBtn.style.cssText = 'margin-top:8px;background:#8b5cf6;border:none;';
+  copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar token';
+  copyBtn.addEventListener('click', function() {
+    navigator.clipboard.writeText(rt).then(function() { toast('Token copiado! Pegalo en EMBEDDED_REFRESH_TOKEN en el index.html'); });
+  });
+  result.innerHTML = '';
+  result.appendChild(title);
+  result.appendChild(desc);
+  result.appendChild(ta);
+  result.appendChild(copyBtn);
+}
+
+// ── Local file storage (fallback when OneDrive not connected) ──
+function uploadPdfLocal(file, recordId) {
+  if (file.size > 2 * 1024 * 1024) return Promise.reject(new Error('El PDF supera 2MB. Comprime en ilovepdf.com'));
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try { localStorage.setItem('se_pdf_' + recordId, e.target.result); resolve({ url: 'local:' + recordId, name: file.name, driveItemId: recordId }); }
+      catch(err) { reject(new Error('Archivo demasiado grande para almacenamiento local.')); }
+    };
+    reader.onerror = function() { reject(new Error('Error al leer el archivo')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function uploadImgLocal(file, noteId) {
+  if (file.size > 1 * 1024 * 1024) return Promise.reject(new Error('La imagen supera 1MB.'));
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try { localStorage.setItem('se_img_' + noteId, e.target.result); resolve({ url: 'local:' + noteId, name: file.name, driveItemId: noteId }); }
+      catch(err) { reject(new Error('Imagen demasiado grande para almacenamiento local.')); }
+    };
+    reader.onerror = function() { reject(new Error('Error al leer la imagen')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ══════════════════════════════════════════
+//  DATA STORE (localStorage + OneDrive sync)
+// ══════════════════════════════════════════
+const KEYS = { records:'se_records', appts:'se_appts', meds:'se_meds', docs:'se_docs', notes:'se_notes', settings:'se_settings', activity:'se_activity', medSchedule:'se_medSchedule', notifs:'se_notifs' };
+
+function loadLocal(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
+function loadLocalObj(k) { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } }
+function saveLocal(k, d) { localStorage.setItem(k, JSON.stringify(d)); }
+
+let records = loadLocal(KEYS.records);
+let appts = loadLocal(KEYS.appts);
+let meds = loadLocal(KEYS.meds);
+let docs = loadLocal(KEYS.docs);
+let notes = loadLocal(KEYS.notes);
+let settings = loadLocalObj(KEYS.settings);
+let activity = loadLocal(KEYS.activity);
+let medSchedule = loadLocal(KEYS.medSchedule);
+let notifications = loadLocal(KEYS.notifs);
+let reminderSettings = loadLocalObj('se_reminders');
+let msUserName = localStorage.getItem('se_user_name') || 'Usuario';
+
+function save(key, data) {
+  saveLocal(key, data);
+  const filename = key.replace('se_', '') + '.json';
+  odWrite(filename, data).catch(function(e) { console.warn('OneDrive sync:', e); });
+}
+
+function saveObj(key, data) {
+  saveLocal(key, data);
+  const filename = key.replace('se_', '') + '.json';
+  odWrite(filename, data).catch(function(e) { console.warn('OneDrive sync:', e); });
+}
+
+// ══════════════════════════════════════════
+//  PORTAL ENTRY / SESSION
+// ══════════════════════════════════════════
+function enterPortal() {
   document.getElementById('login-screen').style.display = 'none';
   const name = msUserName || localStorage.getItem('se_user_name') || 'Usuario';
   document.getElementById('user-name').textContent = name;
-  document.getElementById('user-avatar').textContent = name.slice(0,2).toUpperCase();
+  document.getElementById('user-avatar').textContent = name.slice(0, 2).toUpperCase();
   updateTopbarFamilyCode();
-  renderDashboard(); // Show local data first (instant)
+  renderDashboard();
   updateBellBadge();
   renderNotifPanel();
-  // Auto-sync from OneDrive if token available
-  const hasToken = localStorage.getItem('se_od_refresh') || odTokenValid();
+  // Auto-sync from OneDrive
+  const hasToken = localStorage.getItem('se_od_refresh') || EMBEDDED_REFRESH_TOKEN || odTokenValid();
   if (hasToken) {
     setSyncStatus('syncing');
-    try {
-      const n = await loadFromOneDrive();
-      if (n > 0) {
-        renderDashboard();
-        updateBellBadge();
-        setSyncStatus('synced');
-        if (records.length > 0 || appts.length > 0) {
-          toast('Datos cargados desde OneDrive (' + (records.length) + ' registros, ' + appts.length + ' citas)');
-        }
-      } else {
-        setSyncStatus('synced');
-      }
-    } catch(e) {
-      setSyncStatus('offline');
-      console.warn('Auto-sync error:', e);
-    }
+    loadFromOneDrive().then(function(n) {
+      if (n > 0) { renderDashboard(); setSyncStatus('synced'); if (records.length > 0 || appts.length > 0) toast('Datos cargados desde OneDrive (' + records.length + ' registros)'); }
+      else setSyncStatus('synced');
+    }).catch(function() { setSyncStatus('offline'); });
   }
 }
 
@@ -1299,57 +1307,6 @@ function showFamilyCode() {
 function updateTopbarFamilyCode() {
   const el = document.getElementById('topbar-family-code');
   if (el) el.textContent = msUserName || '';
-};
-
-const pushLocalToOneDrive = async function() {
-  const result = document.getElementById('od-connect-result');
-  if (!await getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
-    toast('Conecta OneDrive primero', 'warning'); return;
-  }
-  if (!confirm('Subir todos los datos locales a OneDrive? Esto sobreescribira los archivos existentes en SaludElena/.')) return;
-  if (result) result.textContent = 'Subiendo datos...';
-  setSyncStatus('syncing');
-  const dataMap = [
-    {key: 'se_records', file: 'records.json'},
-    {key: 'se_appts', file: 'appts.json'},
-    {key: 'se_meds', file: 'meds.json'},
-    {key: 'se_docs', file: 'docs.json'},
-    {key: 'se_notes', file: 'notes.json'},
-    {key: 'se_activity', file: 'activity.json'},
-    {key: 'se_medSchedule', file: 'medSchedule.json'},
-    {key: 'se_notifs', file: 'notifs.json'},
-    {key: 'se_settings', file: 'settings.json'},
-  ];
-  let uploaded = 0;
-  for (const d of dataMap) {
-    const data = localStorage.getItem(d.key);
-    if (data) {
-      try {
-        await odWrite(d.file, JSON.parse(data));
-        uploaded++;
-      } catch(e) { console.warn('Upload error for ' + d.file, e); }
-    }
-  }
-  setSyncStatus('synced');
-  if (result) result.textContent = '✅ ' + uploaded + ' archivos subidos a OneDrive/SaludElena/';
-  toast(uploaded + ' archivos subidos a OneDrive exitosamente');
-};
-
-const manualSync = async function() {
-  if (!getValidOdToken() && !localStorage.getItem('se_od_refresh')) {
-    toast('OneDrive no conectado. Usa el admin setup para conectar.', 'warning');
-    return;
-  }
-  setSyncStatus('syncing');
-  try {
-    const n = await loadFromOneDrive();
-    renderDashboard();
-    if (n > 0) { setSyncStatus('synced'); toast('Sincronizado: ' + n + ' archivos cargados desde OneDrive'); }
-    else { setSyncStatus('synced'); toast('Sincronizado (sin cambios nuevos en OneDrive)'); }
-  } catch(e) {
-    setSyncStatus('offline');
-    toast('Error al sincronizar: ' + e.message, 'warning');
-  }
 }
 
 function setSyncStatus(status) {
@@ -1361,49 +1318,11 @@ function setSyncStatus(status) {
 }
 
 // ══════════════════════════════════════════
-//  DATA STORE// ══════════════════════════════════════════
-//  DATA STORE (localStorage only - simple and reliable)
-// ══════════════════════════════════════════
-const KEYS = {records:'se_records', appts:'se_appts', meds:'se_meds', docs:'se_docs', notes:'se_notes', settings:'se_settings', activity:'se_activity', medSchedule:'se_medSchedule', notifs:'se_notifs'};
-
-function loadLocal(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
-function loadLocalObj(k) { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } }
-function saveLocal(k, d) { localStorage.setItem(k, JSON.stringify(d)); }
-
-let records = loadLocal(KEYS.records);
-let appts = loadLocal(KEYS.appts);
-let meds = loadLocal(KEYS.meds);
-let docs = loadLocal(KEYS.docs);
-let notes = loadLocal(KEYS.notes);
-let settings = loadLocalObj(KEYS.settings);
-let activity = loadLocal(KEYS.activity);
-let medSchedule = loadLocal(KEYS.medSchedule);
-let notifications = loadLocal(KEYS.notifs);
-let reminderSettings = loadLocalObj('se_reminders');
-
-// Save = localStorage first (instant) + OneDrive sync in background
-async function save(key, data) {
-  saveLocal(key, data);
-  const filename = key.replace('se_', '') + '.json';
-  odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
-};
-const saveObj = async function(key, data) {
-  saveLocal(key, data);
-  const filename = key.replace('se_', '') + '.json';
-  odWrite(filename, data).catch(e => console.warn('OneDrive sync:', e));
-}
-
-// ══════════════════════════════════════════
-//  SESSION MANAGEMENT
-// ══════════════════════════════════════════
-let msUserName = localStorage.getItem('se_user_name') || 'Usuario';
-
-// ══════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════
 function showPage(id, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
   if (el) el.classList.add('active');
   if (id === 'dashboard') renderDashboard();
@@ -1427,20 +1346,20 @@ function openModal(id) {
   if (id === 'modal-record') { document.getElementById('rec-date').value = today(); resetPdfUpload(); populateRecordDoctorSelector(); }
   if (id === 'modal-appt') { document.getElementById('appt-date').value = today(); populateDoctorSelector(); document.getElementById('appt-new-doc-hint').style.display = 'none'; }
   if (id === 'modal-med') { document.getElementById('med-start').value = today(); populateMedDoctorSelector(); }
-  if (id === 'modal-share') { const sl = document.getElementById('share-link'); if(sl) sl.value = window.location.href; }
+  if (id === 'modal-share') { const sl = document.getElementById('share-link'); if (sl) sl.value = window.location.href; }
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+document.querySelectorAll('.modal-overlay').forEach(function(m) {
+  m.addEventListener('click', function(e) { if (e.target === m) m.classList.remove('open'); });
 });
 
 // ══════════════════════════════════════════
 //  UTILITIES
 // ══════════════════════════════════════════
 function today() { return new Date().toISOString().split('T')[0]; }
-function fmtDate(d) { if (!d) return '—'; const [y,m,day] = d.split('-'); return day+'/'+m+'/'+y; }
+function fmtDate(d) { if (!d) return '—'; const p = d.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
 function toast(msg, type) {
@@ -1448,20 +1367,20 @@ function toast(msg, type) {
   t.style.background = type === 'warning' ? 'var(--warning)' : type === 'danger' ? 'var(--danger)' : 'var(--primary-dark)';
   document.getElementById('toast-msg').textContent = msg;
   t.style.display = 'flex';
-  setTimeout(() => t.style.display = 'none', 3000);
+  setTimeout(function() { t.style.display = 'none'; }, 3000);
 }
 
 function addActivity(icon, color, text) {
-  activity.unshift({icon, color, text, time: new Date().toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})});
+  activity.unshift({ icon: icon, color: color, text: text, time: new Date().toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) });
   if (activity.length > 20) activity = activity.slice(0, 20);
   save(KEYS.activity, activity);
 }
 
-function copyLink() { navigator.clipboard.writeText(document.getElementById('share-link').value).then(() => toast('Enlace copiado!')); }
+function copyLink() { navigator.clipboard.writeText(document.getElementById('share-link').value).then(function() { toast('Enlace copiado!'); }); }
 
 function tagClass(type) {
-  const map = {diagnostico:'tag-blue', 'diagnóstico':'tag-blue', laboratorio:'tag-yellow', imagen:'tag-green', cirugia:'tag-red', 'cirugía':'tag-red', receta:'tag-orange', proxima:'tag-blue', 'próxima':'tag-blue', completada:'tag-green', cancelada:'tag-red', reprogramada:'tag-orange', activo:'tag-green', suspendido:'tag-gray'};
-  return map[(type||'').toLowerCase()] || 'tag-gray';
+  const map = { 'diagnostico': 'tag-blue', 'diagnóstico': 'tag-blue', 'laboratorio': 'tag-yellow', 'imagen': 'tag-green', 'cirugia': 'tag-red', 'cirugía': 'tag-red', 'receta': 'tag-orange', 'proxima': 'tag-blue', 'próxima': 'tag-blue', 'completada': 'tag-green', 'cancelada': 'tag-red', 'reprogramada': 'tag-orange', 'activo': 'tag-green', 'suspendido': 'tag-gray' };
+  return map[(type || '').toLowerCase()] || 'tag-gray';
 }
 
 // ══════════════════════════════════════════
@@ -1469,7 +1388,7 @@ function tagClass(type) {
 // ══════════════════════════════════════════
 function addNotification(type, title, desc, urgency) {
   urgency = urgency || 'info';
-  const n = {id: uid(), type, title, desc, urgency, time: new Date().toISOString(), read: false};
+  const n = { id: uid(), type: type, title: title, desc: desc, urgency: urgency, time: new Date().toISOString(), read: false };
   notifications.unshift(n);
   if (notifications.length > 50) notifications = notifications.slice(0, 50);
   save(KEYS.notifs, notifications);
@@ -1478,7 +1397,7 @@ function addNotification(type, title, desc, urgency) {
 }
 
 function updateBellBadge() {
-  const unread = notifications.filter(n => !n.read).length;
+  const unread = notifications.filter(function(n) { return !n.read; }).length;
   const badge = document.getElementById('bell-badge');
   const rb = document.getElementById('badge-reminders');
   if (unread > 0) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.remove('hidden'); }
@@ -1498,52 +1417,42 @@ function toggleNotifPanel() {
 function renderNotifPanel() {
   const list = document.getElementById('notif-list');
   if (!notifications.length) { list.innerHTML = '<div class="notif-empty"><i class="fas fa-bell-slash"></i><p>Sin notificaciones</p></div>'; return; }
-  list.innerHTML = notifications.slice(0,20).map(n =>
-    '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="markRead(\'' + n.id + '\')">' +
-    '<div class="notif-dot ' + (n.read ? 'read' : n.urgency) + '"></div>' +
-    '<div style="flex:1;"><div class="notif-text"><strong>' + n.title + '</strong><br/>' + n.desc + '</div>' +
-    '<div class="notif-time">' + new Date(n.time).toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) + '</div></div></div>'
-  ).join('');
+  const icons = { urgent: 'fas fa-triangle-exclamation', warning: 'fas fa-clock', info: 'fas fa-calendar-check', med: 'fas fa-pills' };
+  list.innerHTML = notifications.slice(0, 20).map(function(n) {
+    return '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="markRead(\'' + n.id + '\')">' +
+      '<div class="notif-dot ' + (n.read ? 'read' : n.urgency) + '"></div>' +
+      '<div style="flex:1;"><div class="notif-text"><strong>' + n.title + '</strong><br/>' + n.desc + '</div>' +
+      '<div class="notif-time">' + new Date(n.time).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</div></div></div>';
+  }).join('');
 }
 
 function markRead(id) {
-  const n = notifications.find(x => x.id === id);
+  const n = notifications.find(function(x) { return x.id === id; });
   if (n) { n.read = true; save(KEYS.notifs, notifications); updateBellBadge(); renderNotifPanel(); }
 }
 
 function markAllRead() {
-  notifications.forEach(n => n.read = true);
+  notifications.forEach(function(n) { n.read = true; });
   save(KEYS.notifs, notifications); updateBellBadge(); renderNotifPanel();
   toast('Todas las notificaciones marcadas como leidas');
 }
 
 function requestNotifPermission() {
   if (!('Notification' in window)) { toast('Tu navegador no soporta notificaciones', 'warning'); return; }
-  Notification.requestPermission().then(perm => {
-    if (perm === 'granted') {
-      toast('Notificaciones del navegador activadas!');
-      reminderSettings.browserNotif = true;
-      saveObj('se_reminders', reminderSettings);
-      updatePermBanners();
-      new Notification('Salud Elena', {body: 'Las notificaciones estan activadas.'});
-    } else {
-      toast('Permiso denegado. Activalo en la configuracion del navegador.', 'warning');
-    }
+  Notification.requestPermission().then(function(perm) {
+    if (perm === 'granted') { toast('Notificaciones activadas!'); reminderSettings.browserNotif = true; saveObj('se_reminders', reminderSettings); updatePermBanners(); new Notification('Salud Elena', { body: 'Las notificaciones estan activadas.' }); }
+    else { toast('Permiso denegado.', 'warning'); }
   });
 }
 
 function sendBrowserNotif(title, body, urgency) {
-  if (Notification.permission === 'granted') {
-    new Notification('Salud Elena - ' + title, {body, tag: 'saludelena-' + urgency});
-  }
+  if (Notification.permission === 'granted') new Notification('Salud Elena - ' + title, { body: body, tag: 'saludelena-' + urgency });
 }
 
 function updatePermBanners() {
   const granted = Notification.permission === 'granted';
-  const pb = document.getElementById('perm-banner');
-  const ob = document.getElementById('perm-ok-banner');
-  if (pb) pb.style.display = granted ? 'none' : 'flex';
-  if (ob) ob.style.display = granted ? 'flex' : 'none';
+  const pb = document.getElementById('perm-banner'); if (pb) pb.style.display = granted ? 'none' : 'flex';
+  const ob = document.getElementById('perm-ok-banner'); if (ob) ob.style.display = granted ? 'flex' : 'none';
 }
 
 // ══════════════════════════════════════════
@@ -1552,46 +1461,30 @@ function updatePermBanners() {
 function checkAppointmentReminders() {
   if (!appts.length) return;
   const now = new Date();
-  appts.filter(a => a.status === 'proxima' || a.status === 'próxima').forEach(a => {
-    if (!a.date || !a.time) return;
+  appts.filter(function(a) { return (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time; }).forEach(function(a) {
     const apptDT = new Date(a.date + 'T' + a.time);
     const diffMs = apptDT - now;
     const diffMin = diffMs / 60000;
     const diffHr = diffMin / 60;
     const diffDays = diffHr / 24;
     const lastKey = 'se_reminded_' + a.id;
-    const reminded = JSON.parse(localStorage.getItem(lastKey) || '{}');
-    if (reminderSettings.oneDay && diffDays > 0 && diffDays <= 1.1 && !reminded.oneDay) {
-      addNotification('appt', 'Cita manana', 'Cita: ' + a.doctor + ' - ' + a.reason + ' a las ' + a.time, 'warning');
-      sendBrowserNotif('Cita manana', a.doctor + ' - ' + a.reason, 'warning');
-      reminded.oneDay = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
-    }
-    if (reminderSettings.twoHour && diffHr > 0 && diffHr <= 2.1 && !reminded.twoHour) {
-      addNotification('appt', 'Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent');
-      sendBrowserNotif('Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent');
-      reminded.twoHour = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
-    }
-    if (reminderSettings.thirtyMin && diffMin > 0 && diffMin <= 31 && !reminded.thirtyMin) {
-      addNotification('appt', 'Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent');
-      sendBrowserNotif('Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent');
-      reminded.thirtyMin = true; localStorage.setItem(lastKey, JSON.stringify(reminded));
-    }
+    let reminded = {};
+    try { reminded = JSON.parse(localStorage.getItem(lastKey) || '{}'); } catch {}
+    if (reminderSettings.oneDay && diffDays > 0 && diffDays <= 1.1 && !reminded.oneDay) { addNotification('appt', 'Cita manana', a.doctor + ' - ' + a.reason + ' a las ' + a.time, 'warning'); sendBrowserNotif('Cita manana', a.doctor + ' - ' + a.reason, 'warning'); reminded.oneDay = true; localStorage.setItem(lastKey, JSON.stringify(reminded)); }
+    if (reminderSettings.twoHour && diffHr > 0 && diffHr <= 2.1 && !reminded.twoHour) { addNotification('appt', 'Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent'); sendBrowserNotif('Cita en 2 horas', a.doctor + ' - ' + a.reason, 'urgent'); reminded.twoHour = true; localStorage.setItem(lastKey, JSON.stringify(reminded)); }
+    if (reminderSettings.thirtyMin && diffMin > 0 && diffMin <= 31 && !reminded.thirtyMin) { addNotification('appt', 'Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent'); sendBrowserNotif('Cita en 30 minutos!', a.doctor + ' - ' + a.reason, 'urgent'); reminded.thirtyMin = true; localStorage.setItem(lastKey, JSON.stringify(reminded)); }
   });
 }
 
 function checkMedSchedule() {
   if (!medSchedule.length) return;
   const now = new Date();
-  const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const hhmm = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
   const todayKey = today();
-  medSchedule.forEach(s => {
+  medSchedule.forEach(function(s) {
     const doneKey = 'se_med_done_' + s.id + '_' + todayKey;
     if (localStorage.getItem(doneKey)) return;
-    if (hhmm === s.time) {
-      addNotification('med', 'Hora del medicamento', 'Es hora de tomar: ' + s.label + ' (' + s.time + ')', 'med');
-      sendBrowserNotif('Hora del medicamento', 'Es hora de tomar: ' + s.label, 'med');
-      localStorage.setItem(doneKey, '1');
-    }
+    if (hhmm === s.time) { addNotification('med', 'Hora del medicamento', 'Es hora de tomar: ' + s.label + ' (' + s.time + ')', 'med'); sendBrowserNotif('Hora del medicamento', 'Es hora de tomar: ' + s.label, 'med'); localStorage.setItem(doneKey, '1'); }
   });
 }
 
@@ -1599,15 +1492,15 @@ function checkMorningSummary() {
   if (!reminderSettings.morning) return;
   const mTime = reminderSettings.morningTime || '08:00';
   const now = new Date();
-  const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const hhmm = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
   const doneKey = 'se_morning_' + today();
   if (hhmm === mTime && !localStorage.getItem(doneKey)) {
-    const todayAppts = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date === today());
-    const activeMeds = meds.filter(m => m.status === 'activo');
+    const todayAppts = appts.filter(function(a) { return (a.status === 'proxima' || a.status === 'próxima') && a.date === today(); });
+    const activeMeds = meds.filter(function(m) { return m.status === 'activo'; });
     let summary = 'Buenos dias. ';
     if (todayAppts.length) summary += 'Hoy hay ' + todayAppts.length + ' cita(s). ';
     else summary += 'No hay citas hoy. ';
-    if (activeMeds.length) summary += 'Medicamentos activos: ' + activeMeds.map(m => m.name).join(', ') + '.';
+    if (activeMeds.length) summary += 'Medicamentos activos: ' + activeMeds.map(function(m) { return m.name; }).join(', ') + '.';
     addNotification('summary', 'Resumen del dia', summary, 'info');
     sendBrowserNotif('Resumen del dia', summary, 'info');
     localStorage.setItem(doneKey, '1');
@@ -1617,21 +1510,21 @@ function checkMorningSummary() {
 function computeDashAlerts() {
   const alerts = [];
   const now = new Date();
-  appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time).sort((a,b) => a.date.localeCompare(b.date)).forEach(a => {
+  appts.filter(function(a) { return (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time; }).sort(function(a, b) { return a.date.localeCompare(b.date); }).forEach(function(a) {
     const apptDT = new Date(a.date + 'T' + a.time);
     const diffMs = apptDT - now;
     const diffMin = diffMs / 60000;
     const diffHr = diffMin / 60;
     const diffDays = diffHr / 24;
-    if (diffMin > 0 && diffMin <= 30) alerts.push({type:'urgent', icon:'fas fa-triangle-exclamation', title:'Cita en ' + Math.round(diffMin) + ' minutos!', desc: a.doctor + ' - ' + a.reason, id:'a'+a.id});
-    else if (diffHr > 0 && diffHr <= 2) alerts.push({type:'warning', icon:'fas fa-clock', title:'Cita en ' + Math.round(diffHr*60) + ' minutos', desc: a.doctor + ' - ' + a.reason + ' a las ' + a.time, id:'a'+a.id});
-    else if (diffDays > 0 && diffDays <= 1) alerts.push({type:'info', icon:'fas fa-calendar-check', title:'Cita manana: ' + a.doctor, desc: a.reason + ' a las ' + a.time, id:'a'+a.id});
+    if (diffMin > 0 && diffMin <= 30) alerts.push({ type: 'urgent', icon: 'fas fa-triangle-exclamation', title: 'Cita en ' + Math.round(diffMin) + ' minutos!', desc: a.doctor + ' - ' + a.reason, id: 'a' + a.id });
+    else if (diffHr > 0 && diffHr <= 2) alerts.push({ type: 'warning', icon: 'fas fa-clock', title: 'Cita en ' + Math.round(diffHr * 60) + ' minutos', desc: a.doctor + ' - ' + a.reason + ' a las ' + a.time, id: 'a' + a.id });
+    else if (diffDays > 0 && diffDays <= 1) alerts.push({ type: 'info', icon: 'fas fa-calendar-check', title: 'Cita manana: ' + a.doctor, desc: a.reason + ' a las ' + a.time, id: 'a' + a.id });
   });
-  medSchedule.forEach(s => {
-    const [sh,sm] = s.time.split(':').map(Number);
+  medSchedule.forEach(function(s) {
+    const parts = s.time.split(':').map(Number);
     const now2 = new Date();
-    const diff = (sh*60+sm) - (now2.getHours()*60+now2.getMinutes());
-    if (diff >= 0 && diff <= 15) alerts.push({type:'med', icon:'fas fa-pills', title:'Medicamento en ' + diff + ' min', desc: s.label + ' - ' + s.time, id:'m'+s.id});
+    const diff = (parts[0] * 60 + parts[1]) - (now2.getHours() * 60 + now2.getMinutes());
+    if (diff >= 0 && diff <= 15) alerts.push({ type: 'med', icon: 'fas fa-pills', title: 'Medicamento en ' + diff + ' min', desc: s.label + ' - ' + s.time, id: 'm' + s.id });
   });
   return alerts;
 }
@@ -1640,43 +1533,44 @@ function renderDashAlerts() {
   const alerts = computeDashAlerts();
   const container = document.getElementById('dash-alerts');
   const dismissed = JSON.parse(localStorage.getItem('se_dismissed_alerts') || '{}');
-  const visible = alerts.filter(a => !dismissed[a.id]);
+  const visible = alerts.filter(function(a) { return !dismissed[a.id]; });
   if (!visible.length) { container.innerHTML = ''; return; }
-  container.innerHTML = visible.map(a =>
-    '<div class="alert-banner alert-' + a.type + '" id="alert-' + a.id + '">' +
-    '<i class="' + a.icon + ' alert-banner-icon"></i>' +
-    '<div class="alert-banner-body"><div class="alert-banner-title">' + a.title + '</div><div class="alert-banner-desc">' + a.desc + '</div></div>' +
-    '<button class="alert-dismiss" onclick="dismissAlert(\'' + a.id + '\')"><i class="fas fa-xmark"></i></button></div>'
-  ).join('');
+  container.innerHTML = visible.map(function(a) {
+    return '<div class="alert-banner alert-' + a.type + '" id="alert-' + a.id + '">' +
+      '<i class="' + a.icon + ' alert-banner-icon"></i>' +
+      '<div class="alert-banner-body"><div class="alert-banner-title">' + a.title + '</div><div class="alert-banner-desc">' + a.desc + '</div></div>' +
+      '<button class="alert-dismiss" onclick="dismissAlert(\'' + a.id + '\')"><i class="fas fa-xmark"></i></button></div>';
+  }).join('');
 }
 
 function dismissAlert(id) {
   const d = JSON.parse(localStorage.getItem('se_dismissed_alerts') || '{}');
   d[id] = true; localStorage.setItem('se_dismissed_alerts', JSON.stringify(d));
-  const el = document.getElementById('alert-' + id);
-  if (el) el.remove();
+  const el = document.getElementById('alert-' + id); if (el) el.remove();
 }
 
 function renderDashMedSchedule() {
   const container = document.getElementById('dash-med-schedule');
   if (!medSchedule.length) { container.innerHTML = ''; return; }
   const now = new Date();
-  const nowMin = now.getHours()*60 + now.getMinutes();
-  const sorted = [...medSchedule].sort((a,b) => a.time.localeCompare(b.time));
-  container.innerHTML = '<div class="card" style="margin-bottom:0;"><div class="card-title"><i class="fas fa-clock-rotate-left"></i> Horario de Medicamentos de Hoy</div><div style="display:flex;flex-wrap:wrap;gap:10px;">' +
-    sorted.map(s => {
-      const [sh,sm] = s.time.split(':').map(Number);
-      const sMin = sh*60+sm;
-      const done = !!localStorage.getItem('se_med_done_' + s.id + '_' + today());
-      const upcoming = sMin > nowMin;
-      const status = done ? 'done' : upcoming ? 'upcoming' : 'missed';
-      const colors = {done:'background:#e8f5f0;color:var(--primary);border-color:var(--primary);', upcoming:'background:#fff8e1;color:var(--warning);border-color:var(--warning);', missed:'background:#fdeaea;color:var(--danger);border-color:var(--danger);'};
-      const icons = {done:'fas fa-circle-check', upcoming:'fas fa-clock', missed:'fas fa-circle-exclamation'};
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;border:1.5px solid;font-size:.82rem;font-weight:600;' + colors[status] + '">' +
-        '<i class="' + icons[status] + '"></i>' + s.time + ' - ' + s.label +
-        (!done && !upcoming ? '<button onclick="markMedDone(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:.75rem;margin-left:4px;" title="Marcar como tomado"><i class="fas fa-check"></i></button>' : '') +
-        (done ? '<span style="font-size:.7rem;opacity:.7;">Tomado</span>' : '') + '</div>';
-    }).join('') + '</div></div>';
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const sorted = medSchedule.slice().sort(function(a, b) { return a.time.localeCompare(b.time); });
+  let html = '<div class="card" style="margin-bottom:0;"><div class="card-title"><i class="fas fa-clock-rotate-left"></i> Horario de Medicamentos de Hoy</div><div style="display:flex;flex-wrap:wrap;gap:10px;">';
+  sorted.forEach(function(s) {
+    const parts = s.time.split(':').map(Number);
+    const sMin = parts[0] * 60 + parts[1];
+    const done = !!localStorage.getItem('se_med_done_' + s.id + '_' + today());
+    const upcoming = sMin > nowMin;
+    const status = done ? 'done' : upcoming ? 'upcoming' : 'missed';
+    const colors = { done: 'background:#e8f5f0;color:var(--primary);border-color:var(--primary);', upcoming: 'background:#fff8e1;color:var(--warning);border-color:var(--warning);', missed: 'background:#fdeaea;color:var(--danger);border-color:var(--danger);' };
+    const icons = { done: 'fas fa-circle-check', upcoming: 'fas fa-clock', missed: 'fas fa-circle-exclamation' };
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;border:1.5px solid;font-size:.82rem;font-weight:600;' + colors[status] + '">' +
+      '<i class="' + icons[status] + '"></i>' + s.time + ' - ' + s.label +
+      (!done && !upcoming ? '<button onclick="markMedDone(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:.75rem;margin-left:4px;" title="Marcar como tomado"><i class="fas fa-check"></i></button>' : '') +
+      (done ? '<span style="font-size:.7rem;opacity:.7;">Tomado</span>' : '') + '</div>';
+  });
+  html += '</div></div>';
+  container.innerHTML = html;
 }
 
 function markMedDone(id) {
@@ -1691,35 +1585,33 @@ function markMedDone(id) {
 // ══════════════════════════════════════════
 function renderDashboard() {
   document.getElementById('stat-records').textContent = records.length;
-  document.getElementById('stat-appts').textContent = appts.filter(a => a.status === 'proxima' || a.status === 'próxima').length;
-  document.getElementById('stat-meds').textContent = meds.filter(m => m.status === 'activo').length;
+  document.getElementById('stat-appts').textContent = appts.filter(function(a) { return a.status === 'proxima' || a.status === 'próxima'; }).length;
+  document.getElementById('stat-meds').textContent = meds.filter(function(m) { return m.status === 'activo'; }).length;
   document.getElementById('stat-docs').textContent = docs.length;
   document.getElementById('badge-records').textContent = records.length;
-  document.getElementById('badge-appts').textContent = appts.filter(a => a.status === 'proxima' || a.status === 'próxima').length;
-  document.getElementById('badge-meds').textContent = meds.filter(m => m.status === 'activo').length;
+  document.getElementById('badge-appts').textContent = appts.filter(function(a) { return a.status === 'proxima' || a.status === 'próxima'; }).length;
+  document.getElementById('badge-meds').textContent = meds.filter(function(m) { return m.status === 'activo'; }).length;
   document.getElementById('badge-docs').textContent = docs.length;
   document.getElementById('badge-notes').textContent = notes.length;
   const h = new Date().getHours();
   document.getElementById('dash-greeting').textContent = h < 12 ? 'Buenos dias!' : h < 18 ? 'Buenas tardes!' : 'Buenas noches!';
-  const upcoming = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date >= today()).sort((a,b) => a.date.localeCompare(b.date));
+  const upcoming = appts.filter(function(a) { return (a.status === 'proxima' || a.status === 'próxima') && a.date >= today(); }).sort(function(a, b) { return a.date.localeCompare(b.date); });
   const na = document.getElementById('dash-next-appt');
   if (upcoming.length) {
     const nx = upcoming[0];
-    na.innerHTML = '<div class="appt-upcoming"><i class="fas fa-calendar-star"></i><div><div class="appt-label">Proxima Cita</div><div class="appt-name">' + nx.doctor + ' - ' + (nx.spec||'') + '</div><div class="appt-meta"><i class="fas fa-clock" style="margin-right:5px;"></i>' + fmtDate(nx.date) + ' ' + (nx.time||'') + ' | <i class="fas fa-location-dot" style="margin-right:5px;"></i>' + (nx.place||'Sin lugar especificado') + '</div></div></div>';
+    na.innerHTML = '<div class="appt-upcoming"><i class="fas fa-calendar-star"></i><div><div class="appt-label">Proxima Cita</div><div class="appt-name">' + nx.doctor + ' - ' + (nx.spec || '') + '</div><div class="appt-meta"><i class="fas fa-clock" style="margin-right:5px;"></i>' + fmtDate(nx.date) + ' ' + (nx.time || '') + ' | <i class="fas fa-location-dot" style="margin-right:5px;"></i>' + (nx.place || 'Sin lugar especificado') + '</div></div></div>';
   } else { na.innerHTML = ''; }
   const ul = document.getElementById('dash-appts-list');
   if (upcoming.length) {
-    ul.innerHTML = upcoming.slice(0,4).map(a =>
-      '<div class="activity-item"><div class="activity-icon" style="background:#e8f2fa;color:var(--info);"><i class="fas fa-calendar-check"></i></div>' +
-      '<div><div class="activity-text"><strong>' + a.doctor + '</strong> - ' + a.reason + '</div><div class="activity-time">' + fmtDate(a.date) + ' ' + (a.time||'') + '</div></div></div>'
-    ).join('');
+    ul.innerHTML = upcoming.slice(0, 4).map(function(a) {
+      return '<div class="activity-item"><div class="activity-icon" style="background:#e8f2fa;color:var(--info);"><i class="fas fa-calendar-check"></i></div><div><div class="activity-text"><strong>' + a.doctor + '</strong> - ' + a.reason + '</div><div class="activity-time">' + fmtDate(a.date) + ' ' + (a.time || '') + '</div></div></div>';
+    }).join('');
   } else { ul.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-xmark"></i><p>No hay citas proximas</p></div>'; }
   const al = document.getElementById('dash-activity');
   if (activity.length) {
-    al.innerHTML = activity.slice(0,6).map(a =>
-      '<div class="activity-item"><div class="activity-icon" style="background:' + a.color + '20;color:' + a.color + ';"><i class="' + a.icon + '"></i></div>' +
-      '<div><div class="activity-text">' + a.text + '</div><div class="activity-time">' + a.time + '</div></div></div>'
-    ).join('');
+    al.innerHTML = activity.slice(0, 6).map(function(a) {
+      return '<div class="activity-item"><div class="activity-icon" style="background:' + a.color + '20;color:' + a.color + ';"><i class="' + a.icon + '"></i></div><div><div class="activity-text">' + a.text + '</div><div class="activity-time">' + a.time + '</div></div></div>';
+    }).join('');
   } else { al.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Sin actividad reciente</p></div>'; }
   renderDashAlerts();
   renderDashMedSchedule();
@@ -1731,46 +1623,56 @@ function renderDashboard() {
 let recFilter = 'todos', recSearch = '';
 
 function renderRecords() {
-  let filtered = records.filter(r =>
-    (recFilter === 'todos' || r.type.toLowerCase() === recFilter) &&
-    (r.desc.toLowerCase().includes(recSearch) || (r.doctor||'').toLowerCase().includes(recSearch) || (r.notes||'').toLowerCase().includes(recSearch))
-  );
+  const filtered = records.filter(function(r) {
+    return (recFilter === 'todos' || r.type.toLowerCase() === recFilter) &&
+      (r.desc.toLowerCase().includes(recSearch) || (r.doctor || '').toLowerCase().includes(recSearch) || (r.notes || '').toLowerCase().includes(recSearch));
+  });
   const tb = document.getElementById('records-tbody');
   const em = document.getElementById('records-empty');
   if (!filtered.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
   em.style.display = 'none';
-  tb.innerHTML = filtered.map(r =>
-    '<tr><td>' + fmtDate(r.date) + '</td>' +
-    '<td><span class="tag ' + tagClass(r.type) + '">' + r.type + '</span></td>' +
-    '<td><strong>' + r.desc + '</strong>' + (r.hasPdf ? '<br/><span style="font-size:.75rem;color:#e05252;display:inline-flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer;" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName||'documento.pdf') + '\')"><i class="fas fa-file-pdf"></i> ' + (r.pdfName||'Ver PDF') + '</span>' : '') + '</td>' +
-    '<td>' + (r.doctor||'—') + '</td>' +
-    '<td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.notes||'—') + '</td>' +
-    '<td style="display:flex;gap:5px;">' +
-    (r.hasPdf ? '<button class="btn btn-outline btn-sm" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName||'documento.pdf') + '\')" style="color:#e05252;border-color:#e05252;" title="Ver PDF"><i class="fas fa-file-pdf"></i></button>' : '') +
-    '<button class="btn btn-outline btn-sm" onclick="openEditRecord(\'' + r.id + '\')" style="color:var(--info);border-color:var(--info);" title="Editar"><i class="fas fa-pen"></i></button>' +
-    '<button class="btn btn-danger btn-sm" onclick="deleteRecord(\'' + r.id + '\')" title="Eliminar"><i class="fas fa-trash"></i></button>' +
-    '</td></tr>'
-  ).join('');
+  tb.innerHTML = filtered.map(function(r) {
+    return '<tr><td>' + fmtDate(r.date) + '</td>' +
+      '<td><span class="tag ' + tagClass(r.type) + '">' + r.type + '</span></td>' +
+      '<td><strong>' + r.desc + '</strong>' + (r.hasPdf ? '<br/><span style="font-size:.75rem;color:#e05252;cursor:pointer;" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName || 'documento.pdf') + '\')"><i class="fas fa-file-pdf"></i> ' + (r.pdfName || 'Ver PDF') + '</span>' : '') + '</td>' +
+      '<td>' + (r.doctor || '—') + '</td>' +
+      '<td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.notes || '—') + '</td>' +
+      '<td style="display:flex;gap:5px;">' +
+      (r.hasPdf ? '<button class="btn btn-outline btn-sm" onclick="viewRecordPdf(\'' + r.id + '\',\'' + (r.pdfName || 'documento.pdf') + '\')" style="color:#e05252;border-color:#e05252;" title="Ver PDF"><i class="fas fa-file-pdf"></i></button>' : '') +
+      '<button class="btn btn-outline btn-sm" onclick="openEditRecord(\'' + r.id + '\')" style="color:var(--info);border-color:var(--info);" title="Editar"><i class="fas fa-pen"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteRecord(\'' + r.id + '\')" title="Eliminar"><i class="fas fa-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
 }
 
 function filterRecords(f, el) {
   recFilter = f;
-  document.querySelectorAll('#record-tabs .pill-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#record-tabs .pill-tab').forEach(function(t) { t.classList.remove('active'); });
   el.classList.add('active');
   renderRecords();
 }
 
 function searchRecords(v) { recSearch = v.toLowerCase(); renderRecords(); }
 
-// PDF Upload
+function populateRecordDoctorSelector() {
+  const sel = document.getElementById('rec-doc-select'); if (!sel) return;
+  let html = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + ' - ' + d.spec + '</option>'; });
+  sel.innerHTML = html;
+}
+
+function fillRecordDoctor(docId) {
+  if (!docId) return;
+  const d = docs.find(function(x) { return x.id === docId; }); if (!d) return;
+  document.getElementById('rec-doctor').value = d.name;
+}
+
 function pdfDragOver(e, dropId) { e.preventDefault(); document.getElementById(dropId).classList.add('dragover'); }
 function pdfDragLeave(dropId) { document.getElementById(dropId).classList.remove('dragover'); }
 
 function pdfDrop(e, inputId, dropId) {
-  e.preventDefault();
-  document.getElementById(dropId).classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
+  e.preventDefault(); document.getElementById(dropId).classList.remove('dragover');
+  const file = e.dataTransfer.files[0]; if (!file) return;
   if (file.type !== 'application/pdf') { toast('Solo se permiten archivos PDF', 'warning'); return; }
   const input = document.getElementById(inputId);
   const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
@@ -1778,11 +1680,10 @@ function pdfDrop(e, inputId, dropId) {
 }
 
 function pdfFileSelected(input, dropId) {
-  const file = input.files[0];
-  if (!file) return;
+  const file = input.files[0]; if (!file) return;
   const drop = document.getElementById(dropId);
   drop.classList.add('has-file');
-  drop.innerHTML = '<i class="fas fa-file-pdf" style="color:#e05252;"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size/1024).toFixed(0) + ' KB</p>';
+  drop.innerHTML = '<i class="fas fa-file-pdf" style="color:#e05252;"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size / 1024).toFixed(0) + ' KB</p>';
 }
 
 function resetPdfUpload() {
@@ -1790,154 +1691,65 @@ function resetPdfUpload() {
   const drop = document.getElementById('rec-pdf-drop');
   const progress = document.getElementById('rec-pdf-progress');
   if (input) input.value = '';
-  if (drop) { drop.classList.remove('has-file','dragover'); drop.innerHTML = '<i class="fas fa-cloud-arrow-up"></i><p>Haz clic o arrastra un PDF aqui</p><p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>'; }
+  if (drop) { drop.classList.remove('has-file', 'dragover'); drop.innerHTML = '<i class="fas fa-cloud-arrow-up"></i><p>Haz clic o arrastra un PDF aqui</p><p style="font-size:.72rem;margin-top:2px;">Cualquier tamano - Se guarda en OneDrive</p>'; }
   if (progress) progress.style.display = 'none';
 }
 
-// ── Local file storage (Base64 in localStorage) ──
-async function uploadPdfLocal(file, recordId) {
-  if (file.size > 2 * 1024 * 1024) throw new Error('El PDF supera 2MB. Comprime el archivo en ilovepdf.com e intenta de nuevo.');
-  const progress = document.getElementById('rec-pdf-progress');
-  const bar = document.getElementById('rec-pdf-bar');
-  if (progress) progress.style.display = 'block';
-  if (bar) bar.style.width = '30%';
-  const base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = () => reject(new Error('Error al leer el archivo'));
-    reader.readAsDataURL(file);
-  });
-  if (bar) bar.style.width = '80%';
-  try {
-    localStorage.setItem('se_pdf_' + recordId, base64);
-  } catch(e) {
-    throw new Error('Archivo demasiado grande para almacenamiento local. Comprime el PDF primero.');
-  }
-  if (bar) bar.style.width = '100%';
-  return {url: 'local:' + recordId, name: file.name, driveItemId: recordId};
-};
-
-const uploadImgLocal = async function(file, noteId) {
-  if (file.size > 1 * 1024 * 1024) throw new Error('La imagen supera 1MB. Reduce el tamano de la imagen primero.');
-  const base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = () => reject(new Error('Error al leer la imagen'));
-    reader.readAsDataURL(file);
-  });
-  try {
-    localStorage.setItem('se_img_' + noteId, base64);
-  } catch(e) {
-    throw new Error('Imagen demasiado grande para almacenamiento local.');
-  }
-  return {url: 'local:' + noteId, name: file.name, driveItemId: noteId};
-}
-
-function viewRecordPdf(recordId, fileName) {
-  const rec = records.find(r => r.id === recordId);
-  if (rec && rec.pdfUrl && rec.pdfUrl.startsWith('local:')) {
-    const base64 = localStorage.getItem('se_pdf_' + recordId);
-    if (base64) {
-      const win = window.open();
-      win.document.write('<iframe src="' + base64 + '" width="100%" height="100%" style="border:none;"></iframe>');
-      return;
-    }
-  } else if (rec && rec.pdfUrl) {
-    window.open(rec.pdfUrl, '_blank');
-    return;
-  }
-  toast('PDF no encontrado', 'warning');
-}
-
-function populateRecordDoctorSelector() {
-  const sel = document.getElementById('rec-doc-select'); if (!sel) return;
-  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
-  docs.forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
-    sel.appendChild(opt);
-  });
-}
-
-function fillRecordDoctor(docId) {
-  if (!docId) return;
-  const d = docs.find(x => x.id === docId); if (!d) return;
-  document.getElementById('rec-doctor').value = d.name;
-}
-
-function noteImgDrop(e) {
-  e.preventDefault();
-  document.getElementById('note-img-drop').classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) { toast('Solo se permiten imagenes', 'warning'); return; }
-  const input = document.getElementById('note-img-input');
-  const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
-  noteImgSelected(input);
-}
-
-function noteImgSelected(input) {
-  const file = input.files[0]; if (!file) return;
-  const drop = document.getElementById('note-img-drop');
-  drop.classList.add('has-file');
-  drop.innerHTML = '<i class="fas fa-image" style="color:var(--info);"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size/1024).toFixed(0) + ' KB</p>';
-  // Show preview
-  const preview = document.getElementById('note-img-preview');
-  if (preview) {
-    const reader = new FileReader();
-    reader.onload = e => { preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:8px;margin-top:6px;" alt="preview"/>'; };
-    reader.readAsDataURL(file);
-  }
-};
-
-const saveRecord = async function() {
+function saveRecord() {
   const date = document.getElementById('rec-date').value;
   const type = document.getElementById('rec-type').value;
   const desc = document.getElementById('rec-desc').value.trim();
   if (!date || !type || !desc) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
   const btn = document.getElementById('rec-save-btn');
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-  const safetyTimer = setTimeout(() => {
-    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
-    toast('El proceso tardo demasiado. Intenta de nuevo.', 'warning');
-  }, 25000);
-  const r = {id: uid(), date, type, desc, doctor: document.getElementById('rec-doctor').value.trim(), notes: document.getElementById('rec-notes').value.trim(), pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false};
+  const safetyTimer = setTimeout(function() { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar'; toast('El proceso tardo demasiado. Intenta de nuevo.', 'warning'); }, 25000);
+  const r = { id: uid(), date: date, type: type, desc: desc, doctor: document.getElementById('rec-doctor').value.trim(), notes: document.getElementById('rec-notes').value.trim(), pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false };
   const pdfInput = document.getElementById('rec-pdf-input');
-  if (pdfInput && pdfInput.files && pdfInput.files[0]) {
-    try {
-      const safeName = r.id + '_' + pdfInput.files[0].name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const pdfFile = pdfInput && pdfInput.files && pdfInput.files[0] ? pdfInput.files[0] : null;
+  const uploadPromise = pdfFile ? (
+    getValidOdToken().then(function(token) {
+      const safeName = r.id + '_' + pdfFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const progress = document.getElementById('rec-pdf-progress');
       const bar = document.getElementById('rec-pdf-bar');
       if (progress) progress.style.display = 'block';
       if (bar) bar.style.width = '30%';
-      const result = (await getValidOdToken())
-        ? await odUploadFile(pdfInput.files[0], r.id + '_' + pdfInput.files[0].name.replace(/[^a-zA-Z0-9._-]/g,'_'))
-        : await uploadPdfLocal(pdfInput.files[0], r.id);
-      if (bar) bar.style.width = '100%';
-      r.pdfName = result.name; r.pdfUrl = result.url; r.driveItemId = result.driveItemId; r.hasPdf = true;
-    } catch(e) {
-      clearTimeout(safetyTimer);
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
-      const progress = document.getElementById('rec-pdf-progress');
-      if (progress) progress.style.display = 'none';
-      const saveWithout = confirm('Error al subir PDF:\n' + e.message + '\n\nGuardar el registro sin PDF?');
-      if (!saveWithout) return;
-    }
+      return (token ? odUploadFile(pdfFile, safeName) : uploadPdfLocal(pdfFile, r.id)).then(function(result) {
+        if (bar) bar.style.width = '100%';
+        r.pdfName = result.name; r.pdfUrl = result.url; r.driveItemId = result.driveItemId; r.hasPdf = true;
+      });
+    })
+  ) : Promise.resolve();
+  uploadPromise.catch(function(e) {
+    clearTimeout(safetyTimer);
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+    const progress = document.getElementById('rec-pdf-progress'); if (progress) progress.style.display = 'none';
+    if (!confirm('Error al subir PDF:\n' + e.message + '\n\nGuardar el registro sin PDF?')) return;
+  }).then(function() {
+    clearTimeout(safetyTimer);
+    records.unshift(r); save(KEYS.records, records);
+    addActivity('fas fa-file-medical', '#2a7d5f', 'Nuevo registro: ' + desc + (r.hasPdf ? ' (con PDF)' : ''));
+    closeModal('modal-record');
+    ['rec-date', 'rec-type', 'rec-desc', 'rec-doctor', 'rec-notes'].forEach(function(id) { document.getElementById(id).value = ''; });
+    resetPdfUpload();
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+    renderDashboard(); renderRecords();
+    toast(r.hasPdf ? 'Registro guardado con PDF adjunto' : 'Registro guardado');
+  });
+}
+
+function viewRecordPdf(recordId, fileName) {
+  const rec = records.find(function(r) { return r.id === recordId; });
+  if (rec && rec.pdfUrl) {
+    if (rec.pdfUrl.startsWith('local:')) {
+      const base64 = localStorage.getItem('se_pdf_' + recordId);
+      if (base64) { const win = window.open(); win.document.write('<iframe src="' + base64 + '" width="100%" height="100%" style="border:none;"></iframe>'); return; }
+    } else { window.open(rec.pdfUrl, '_blank'); return; }
   }
-  clearTimeout(safetyTimer);
-  records.unshift(r);
-  await save(KEYS.records, records);
-  addActivity('fas fa-file-medical', '#2a7d5f', 'Nuevo registro: ' + desc + (r.hasPdf ? ' (con PDF)' : ''));
-  closeModal('modal-record');
-  ['rec-date','rec-type','rec-desc','rec-doctor','rec-notes'].forEach(id => document.getElementById(id).value = '');
-  resetPdfUpload();
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
-  renderDashboard(); renderRecords();
-  toast(r.hasPdf ? 'Registro guardado con PDF adjunto' : 'Registro guardado');
+  toast('PDF no encontrado', 'warning');
 }
 
 function openEditRecord(id) {
-  const r = records.find(x => x.id === id); if (!r) return;
+  const r = records.find(function(x) { return x.id === id; }); if (!r) return;
   document.getElementById('edit-rec-id').value = id;
   document.getElementById('edit-rec-date').value = r.date || '';
   document.getElementById('edit-rec-type').value = r.type || '';
@@ -1946,14 +1758,13 @@ function openEditRecord(id) {
   document.getElementById('edit-rec-notes').value = r.notes || '';
   const pdfInfo = document.getElementById('edit-rec-pdf-info');
   const pdfName = document.getElementById('edit-rec-pdf-name');
-  if (r.hasPdf && r.pdfName) { pdfInfo.style.display = 'block'; pdfName.textContent = r.pdfName; }
-  else { pdfInfo.style.display = 'none'; }
+  if (r.hasPdf && r.pdfName) { pdfInfo.style.display = 'block'; pdfName.textContent = r.pdfName; } else { pdfInfo.style.display = 'none'; }
   openModal('modal-edit-record');
-};
+}
 
-const saveEditRecord = async function() {
+function saveEditRecord() {
   const id = document.getElementById('edit-rec-id').value;
-  const r = records.find(x => x.id === id); if (!r) return;
+  const r = records.find(function(x) { return x.id === id; }); if (!r) return;
   const date = document.getElementById('edit-rec-date').value;
   const type = document.getElementById('edit-rec-type').value;
   const desc = document.getElementById('edit-rec-desc').value.trim();
@@ -1961,23 +1772,20 @@ const saveEditRecord = async function() {
   r.date = date; r.type = type; r.desc = desc;
   r.doctor = document.getElementById('edit-rec-doctor').value.trim();
   r.notes = document.getElementById('edit-rec-notes').value.trim();
-  await save(KEYS.records, records);
+  save(KEYS.records, records);
   addActivity('fas fa-pen', '#3a8fc4', 'Registro editado: ' + desc);
   closeModal('modal-edit-record');
   renderRecords(); renderDashboard();
   toast('Registro actualizado');
 }
 
-
-
 let _deleteRecordId = null;
-
 function deleteRecord(id) {
-  const r = records.find(x => x.id === id); if (!r) return;
+  const r = records.find(function(x) { return x.id === id; }); if (!r) return;
   _deleteRecordId = id;
   document.getElementById('delete-rec-desc-preview').textContent = r.desc;
   document.getElementById('delete-rec-meta-preview').textContent = fmtDate(r.date) + ' - ' + r.type + (r.doctor ? ' - ' + r.doctor : '');
-  document.getElementById('delete-rec-pdf-warning').textContent = r.hasPdf ? 'Este registro tiene un PDF adjunto que tambien sera eliminado de OneDrive.' : '';
+  document.getElementById('delete-rec-pdf-warning').textContent = r.hasPdf ? 'Este registro tiene un PDF adjunto que tambien sera eliminado.' : '';
   document.getElementById('delete-rec-confirm-input').value = '';
   document.getElementById('delete-rec-confirm-btn').disabled = true;
   openModal('modal-delete-record');
@@ -1986,14 +1794,18 @@ function deleteRecord(id) {
 function checkDeleteConfirm() {
   const val = document.getElementById('delete-rec-confirm-input').value.trim().toUpperCase();
   document.getElementById('delete-rec-confirm-btn').disabled = (val !== 'ELIMINAR');
-};
+}
 
-const confirmDeleteRecord = async function() {
+function confirmDeleteRecord() {
   const id = _deleteRecordId; if (!id) return;
-  const r = records.find(x => x.id === id);
-  if (r && r.hasPdf && r.driveItemId) { localStorage.removeItem('se_pdf_' + r.id); }
-  records = records.filter(r => r.id !== id);
-  await save(KEYS.records, records);
+  const r = records.find(function(x) { return x.id === id; });
+  if (r && r.hasPdf) {
+    if (r.driveItemId && !r.pdfUrl.startsWith('local:')) {
+      getValidOdToken().then(function(token) { if (token) fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + r.driveItemId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } }).catch(function() {}); });
+    } else { localStorage.removeItem('se_pdf_' + id); }
+  }
+  records = records.filter(function(x) { return x.id !== id; });
+  save(KEYS.records, records);
   closeModal('modal-delete-record');
   _deleteRecordId = null;
   renderRecords(); renderDashboard();
@@ -2006,46 +1818,43 @@ const confirmDeleteRecord = async function() {
 let apptFilter = 'todas';
 
 function renderAppts() {
-  let filtered = appts.filter(a => apptFilter === 'todas' || a.status === apptFilter);
-  filtered.sort((a,b) => a.date.localeCompare(b.date));
+  let filtered = appts.filter(function(a) { return apptFilter === 'todas' || a.status === apptFilter; });
+  filtered.sort(function(a, b) { return a.date.localeCompare(b.date); });
   const tb = document.getElementById('appts-tbody');
   const em = document.getElementById('appts-empty');
   if (!filtered.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
   em.style.display = 'none';
-  tb.innerHTML = filtered.map(a =>
-    '<tr><td><strong>' + fmtDate(a.date) + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.time||'') + '</span></td>' +
-    '<td><strong>' + a.doctor + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.spec||'') + '</span></td>' +
-    '<td>' + a.reason + (a.comments ? '<br/><span style="font-size:.75rem;color:var(--ink3);font-style:italic;"><i class="fas fa-comment-medical" style="margin-right:3px;"></i>' + a.comments.slice(0,60) + (a.comments.length>60?'...':'') + '</span>' : '') + '</td>' +
-    '<td>' + (a.place||'—') + '</td>' +
-    '<td><span class="tag ' + tagClass(a.status) + '">' + a.status + '</span></td>' +
-    '<td style="display:flex;gap:5px;flex-wrap:wrap;">' +
-    '<button class="btn btn-outline btn-sm" onclick="openEditAppt(\'' + a.id + '\')" style="color:var(--ink2);border-color:var(--border);" title="Editar"><i class="fas fa-pen"></i></button>' +
-    ((a.status === 'proxima' || a.status === 'próxima') ? '<button class="btn btn-outline btn-sm" onclick="openCompleteAppt(\'' + a.id + '\')" title="Marcar completada"><i class="fas fa-check"></i></button><button class="btn btn-outline btn-sm" onclick="exportApptICS(\'' + a.id + '\')" style="color:var(--info);border-color:var(--info);" title="Agregar al calendario"><i class="fas fa-calendar-plus"></i></button>' : '') +
-    '<button class="btn btn-danger btn-sm" onclick="deleteAppt(\'' + a.id + '\')"><i class="fas fa-trash"></i></button>' +
-    '</td></tr>'
-  ).join('');
+  tb.innerHTML = filtered.map(function(a) {
+    return '<tr><td><strong>' + fmtDate(a.date) + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.time || '') + '</span></td>' +
+      '<td><strong>' + a.doctor + '</strong><br/><span style="font-size:.78rem;color:var(--ink3);">' + (a.spec || '') + '</span></td>' +
+      '<td>' + a.reason + (a.comments ? '<br/><span style="font-size:.75rem;color:var(--ink3);font-style:italic;"><i class="fas fa-comment-medical" style="margin-right:3px;"></i>' + a.comments.slice(0, 60) + (a.comments.length > 60 ? '...' : '') + '</span>' : '') + '</td>' +
+      '<td>' + (a.place || '—') + '</td>' +
+      '<td><span class="tag ' + tagClass(a.status) + '">' + a.status + '</span></td>' +
+      '<td style="display:flex;gap:5px;flex-wrap:wrap;">' +
+      '<button class="btn btn-outline btn-sm" onclick="openEditAppt(\'' + a.id + '\')" style="color:var(--ink2);border-color:var(--border);" title="Editar"><i class="fas fa-pen"></i></button>' +
+      ((a.status === 'proxima' || a.status === 'próxima') ? '<button class="btn btn-outline btn-sm" onclick="openCompleteAppt(\'' + a.id + '\')" title="Marcar completada"><i class="fas fa-check"></i></button><button class="btn btn-outline btn-sm" onclick="exportApptICS(\'' + a.id + '\')" style="color:var(--info);border-color:var(--info);" title="Agregar al calendario"><i class="fas fa-calendar-plus"></i></button>' : '') +
+      '<button class="btn btn-danger btn-sm" onclick="deleteAppt(\'' + a.id + '\')"><i class="fas fa-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
 }
 
 function filterAppts(f, el) {
   apptFilter = f;
-  document.querySelectorAll('#page-appointments .pill-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-appointments .pill-tab').forEach(function(t) { t.classList.remove('active'); });
   el.classList.add('active');
   renderAppts();
 }
 
 function populateDoctorSelector() {
   const sel = document.getElementById('appt-doc-select'); if (!sel) return;
-  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
-  docs.forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
-    sel.appendChild(opt);
-  });
+  let html = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + ' - ' + d.spec + '</option>'; });
+  sel.innerHTML = html;
 }
 
 function fillDoctorFromContact(docId) {
   if (!docId) return;
-  const d = docs.find(x => x.id === docId); if (!d) return;
+  const d = docs.find(function(x) { return x.id === docId; }); if (!d) return;
   document.getElementById('appt-doctor').value = d.name;
   document.getElementById('appt-spec').value = d.spec || '';
   document.getElementById('appt-place').value = d.clinic || d.address || '';
@@ -2056,32 +1865,26 @@ function checkNewDoctor() {
   const name = document.getElementById('appt-doctor').value.trim();
   const hint = document.getElementById('appt-new-doc-hint');
   if (!name) { hint.style.display = 'none'; return; }
-  const exists = docs.some(d => d.name.toLowerCase() === name.toLowerCase());
-  hint.style.display = exists ? 'none' : 'block';
-};
+  hint.style.display = docs.some(function(d) { return d.name.toLowerCase() === name.toLowerCase(); }) ? 'none' : 'block';
+}
 
-const saveAppt = async function() {
+function saveAppt() {
   const date = document.getElementById('appt-date').value;
   const doctor = document.getElementById('appt-doctor').value.trim();
   const reason = document.getElementById('appt-reason').value.trim();
   if (!date || !doctor || !reason) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
-  const a = {id: uid(), date, time: document.getElementById('appt-time').value, doctor, spec: document.getElementById('appt-spec').value.trim(), reason, place: document.getElementById('appt-place').value.trim(), status: document.getElementById('appt-status').value, notes: document.getElementById('appt-notes').value.trim(), comments: ''};
-  appts.unshift(a);
-  await save(KEYS.appts, appts);
-  // Auto-save new doctor
-  const exists = docs.some(d => d.name.toLowerCase() === doctor.toLowerCase());
+  const a = { id: uid(), date: date, time: document.getElementById('appt-time').value, doctor: doctor, spec: document.getElementById('appt-spec').value.trim(), reason: reason, place: document.getElementById('appt-place').value.trim(), status: document.getElementById('appt-status').value, notes: document.getElementById('appt-notes').value.trim(), comments: '' };
+  appts.unshift(a); save(KEYS.appts, appts);
+  const exists = docs.some(function(d) { return d.name.toLowerCase() === doctor.toLowerCase(); });
   if (!exists) {
-    const newDoc = {id: uid(), name: doctor, spec: a.spec||'', phone: document.getElementById('appt-new-doc-phone').value.trim(), email: '', clinic: a.place||'', address: document.getElementById('appt-new-doc-address').value.trim(), notes: 'Agregado automaticamente desde cita'};
-    docs.unshift(newDoc);
-    await save(KEYS.docs, docs);
+    const newDoc = { id: uid(), name: doctor, spec: a.spec || '', phone: document.getElementById('appt-new-doc-phone').value.trim(), email: '', clinic: a.place || '', address: document.getElementById('appt-new-doc-address').value.trim(), notes: 'Agregado automaticamente desde cita' };
+    docs.unshift(newDoc); save(KEYS.docs, docs);
     addActivity('fas fa-user-doctor', '#e05252', 'Medico agregado automaticamente: ' + doctor);
     toast('Cita guardada - ' + doctor + ' agregado a Contactos');
-  } else {
-    toast('Cita guardada');
-  }
+  } else { toast('Cita guardada'); }
   addActivity('fas fa-calendar-plus', '#3a8fc4', 'Nueva cita: ' + doctor + ' - ' + fmtDate(date));
   closeModal('modal-appt');
-  ['appt-date','appt-time','appt-doctor','appt-spec','appt-reason','appt-place','appt-notes','appt-new-doc-phone','appt-new-doc-address'].forEach(id => document.getElementById(id).value = '');
+  ['appt-date', 'appt-time', 'appt-doctor', 'appt-spec', 'appt-reason', 'appt-place', 'appt-notes', 'appt-new-doc-phone', 'appt-new-doc-address'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('appt-status').value = 'proxima';
   document.getElementById('appt-doc-select').value = '';
   document.getElementById('appt-new-doc-hint').style.display = 'none';
@@ -2089,29 +1892,27 @@ const saveAppt = async function() {
 }
 
 let _completeApptId = null;
-
 function openCompleteAppt(id) {
-  const a = appts.find(x => x.id === id); if (!a) return;
+  const a = appts.find(function(x) { return x.id === id; }); if (!a) return;
   _completeApptId = id;
-  document.getElementById('complete-appt-info').innerHTML = '<i class="fas fa-calendar-check" style="color:var(--primary);margin-right:8px;"></i><strong>' + a.doctor + '</strong> - ' + a.reason + '<br/><span style="font-size:.8rem;color:var(--ink3);">' + fmtDate(a.date) + ' ' + (a.time||'') + ' | ' + (a.place||'Sin lugar') + '</span>';
+  document.getElementById('complete-appt-info').innerHTML = '<i class="fas fa-calendar-check" style="color:var(--primary);margin-right:8px;"></i><strong>' + a.doctor + '</strong> - ' + a.reason + '<br/><span style="font-size:.8rem;color:var(--ink3);">' + fmtDate(a.date) + ' ' + (a.time || '') + ' | ' + (a.place || 'Sin lugar') + '</span>';
   document.getElementById('complete-appt-comments').value = '';
   document.getElementById('complete-appt-record').value = 'yes';
   openModal('modal-complete-appt');
-};
+}
 
-const confirmCompleteAppt = async function() {
-  const a = appts.find(x => x.id === _completeApptId); if (!a) return;
+function confirmCompleteAppt() {
+  const a = appts.find(function(x) { return x.id === _completeApptId; }); if (!a) return;
   const comments = document.getElementById('complete-appt-comments').value.trim();
   const createRecord = document.getElementById('complete-appt-record').value === 'yes';
   a.status = 'completada'; a.comments = comments;
-  await save(KEYS.appts, appts);
+  save(KEYS.appts, appts);
   if (createRecord) {
-    const r = {id: uid(), date: a.date, type: 'Diagnostico', desc: 'Consulta: ' + a.reason, doctor: a.doctor, notes: comments || a.notes || '', pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false};
-    records.unshift(r);
-    await save(KEYS.records, records);
+    const r = { id: uid(), date: a.date, type: 'Diagnostico', desc: 'Consulta: ' + a.reason, doctor: a.doctor, notes: comments || a.notes || '', pdfName: '', pdfUrl: '', driveItemId: '', hasPdf: false };
+    records.unshift(r); save(KEYS.records, records);
     addActivity('fas fa-file-medical', '#2a7d5f', 'Registro creado desde cita: ' + a.reason);
   }
-  addActivity('fas fa-circle-check', '#2a7d5f', 'Cita completada: ' + a.doctor + (comments ? ' - ' + comments.slice(0,40) : ''));
+  addActivity('fas fa-circle-check', '#2a7d5f', 'Cita completada: ' + a.doctor + (comments ? ' - ' + comments.slice(0, 40) : ''));
   closeModal('modal-complete-appt');
   _completeApptId = null;
   renderAppts(); renderDashboard();
@@ -2119,7 +1920,7 @@ const confirmCompleteAppt = async function() {
 }
 
 function openEditAppt(id) {
-  const a = appts.find(x => x.id === id); if (!a) return;
+  const a = appts.find(function(x) { return x.id === id; }); if (!a) return;
   document.getElementById('edit-appt-id').value = id;
   document.getElementById('edit-appt-date').value = a.date || '';
   document.getElementById('edit-appt-time').value = a.time || '';
@@ -2131,11 +1932,11 @@ function openEditAppt(id) {
   document.getElementById('edit-appt-notes').value = a.notes || '';
   document.getElementById('edit-appt-comments').value = a.comments || '';
   openModal('modal-edit-appt');
-};
+}
 
-const saveEditAppt = async function() {
+function saveEditAppt() {
   const id = document.getElementById('edit-appt-id').value;
-  const a = appts.find(x => x.id === id); if (!a) return;
+  const a = appts.find(function(x) { return x.id === id; }); if (!a) return;
   const prevStatus = a.status;
   a.date = document.getElementById('edit-appt-date').value;
   a.time = document.getElementById('edit-appt-time').value;
@@ -2146,29 +1947,54 @@ const saveEditAppt = async function() {
   a.status = document.getElementById('edit-appt-status').value;
   a.notes = document.getElementById('edit-appt-notes').value.trim();
   a.comments = document.getElementById('edit-appt-comments').value.trim();
-  await save(KEYS.appts, appts);
+  save(KEYS.appts, appts);
   const statusChanged = prevStatus !== a.status ? ' (' + prevStatus + ' -> ' + a.status + ')' : '';
   addActivity('fas fa-pen-to-square', '#3a8fc4', 'Cita editada: ' + a.doctor + statusChanged);
   closeModal('modal-edit-appt');
   renderAppts(); renderDashboard();
   toast('Cita actualizada');
-};
+}
 
-const deleteAppt = async function(id) {
+function deleteAppt(id) {
   if (!confirm('Eliminar esta cita?')) return;
-  appts = appts.filter(a => a.id !== id);
-  await save(KEYS.appts, appts);
+  appts = appts.filter(function(a) { return a.id !== id; });
+  save(KEYS.appts, appts);
   renderAppts(); renderDashboard();
   toast('Cita eliminada');
-};
+}
 
-const completeAppt = async function(id) {
-  const a = appts.find(x => x.id === id); if (!a) return;
-  a.status = 'completada';
-  await save(KEYS.appts, appts);
-  addActivity('fas fa-circle-check', '#2a7d5f', 'Cita completada: ' + a.doctor);
-  renderAppts(); renderDashboard();
-  toast('Cita marcada como completada');
+function exportAllApptICS() {
+  const upcoming = appts.filter(function(a) { return (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time; });
+  if (!upcoming.length) { toast('No hay citas proximas con fecha y hora para exportar', 'warning'); return; }
+  const ics = buildICSFile(upcoming.map(buildICSEvent));
+  downloadICS(ics, 'salud_elena_citas_' + today() + '.ics');
+  toast(upcoming.length + ' cita(s) exportadas al calendario');
+}
+
+function exportApptICS(id) {
+  const a = appts.find(function(x) { return x.id === id; });
+  if (!a || !a.date || !a.time) { toast('La cita necesita fecha y hora para exportar', 'warning'); return; }
+  downloadICS(buildICSFile([buildICSEvent(a)]), 'cita_' + a.doctor.replace(/\s+/g, '_') + '_' + a.date + '.ics');
+  toast('Evento descargado');
+}
+
+function buildICSEvent(a) {
+  const now = new Date();
+  const pad = function(n) { return String(n).padStart(2, '0'); };
+  const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + 'T' + pad(now.getHours()) + pad(now.getMinutes()) + '00Z';
+  const start = a.date.replace(/-/g, '') + 'T' + a.time.replace(':', '') + '00';
+  const dt = new Date(a.date + 'T' + a.time); dt.setHours(dt.getHours() + 1);
+  const end = dt.getFullYear() + pad(dt.getMonth() + 1) + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + pad(dt.getMinutes()) + '00';
+  return ['BEGIN:VEVENT', 'UID:saludelena-' + a.id + '@saludelena', 'DTSTAMP:' + stamp, 'DTSTART:' + start, 'DTEND:' + end, 'SUMMARY:Cita medica - ' + a.doctor, 'DESCRIPTION:Motivo: ' + a.reason + '\\nLugar: ' + (a.place || ''), 'LOCATION:' + (a.place || ''), 'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Cita manana con ' + a.doctor, 'END:VALARM', 'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 2 horas con ' + a.doctor, 'END:VALARM', 'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 30 minutos con ' + a.doctor, 'END:VALARM', 'END:VEVENT'].join('\r\n');
+}
+
+function buildICSFile(events) {
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Salud Elena//Portal//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'].concat(events).concat(['END:VCALENDAR']).join('\r\n');
+}
+
+function downloadICS(content, filename) {
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ══════════════════════════════════════════
@@ -2177,82 +2003,70 @@ const completeAppt = async function(id) {
 let medFilter = 'todos';
 
 function renderMeds() {
-  let filtered = meds.filter(m => medFilter === 'todos' || m.status === medFilter);
+  const filtered = meds.filter(function(m) { return medFilter === 'todos' || m.status === medFilter; });
   const grid = document.getElementById('meds-grid');
   const em = document.getElementById('meds-empty');
   if (!filtered.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
   em.style.display = 'none';
-  grid.innerHTML = filtered.map(m =>
-    '<div class="med-card"><div class="med-name"><i class="fas fa-capsules" style="color:var(--primary);margin-right:6px;"></i>' + m.name + '</div>' +
-    '<div class="med-dose">' + m.dose + ' - ' + m.freq + '</div>' +
-    '<div class="med-detail"><i class="fas fa-route"></i>' + m.route + '</div>' +
-    '<div class="med-detail"><i class="fas fa-calendar-day"></i>Desde: ' + fmtDate(m.start) + '</div>' +
-    (m.doctor ? '<div class="med-detail"><i class="fas fa-user-doctor"></i>' + m.doctor + '</div>' : '') +
-    (m.notes ? '<div class="med-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + m.notes + '</div>' : '') +
-    '<div style="margin-top:10px;"><span class="tag ' + tagClass(m.status) + '">' + m.status + '</span></div>' +
-    '<div class="med-actions">' +
-    (m.status === 'activo' ? '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-pause"></i> Suspender</button>' : '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-play"></i> Activar</button>') +
-    '<button class="btn btn-danger btn-sm" onclick="deleteMed(\'' + m.id + '\')"><i class="fas fa-trash"></i></button>' +
-    '</div></div>'
-  ).join('');
+  grid.innerHTML = filtered.map(function(m) {
+    return '<div class="med-card"><div class="med-name"><i class="fas fa-capsules" style="color:var(--primary);margin-right:6px;"></i>' + m.name + '</div>' +
+      '<div class="med-dose">' + m.dose + ' - ' + m.freq + '</div>' +
+      '<div class="med-detail"><i class="fas fa-route"></i>' + m.route + '</div>' +
+      '<div class="med-detail"><i class="fas fa-calendar-day"></i>Desde: ' + fmtDate(m.start) + '</div>' +
+      (m.doctor ? '<div class="med-detail"><i class="fas fa-user-doctor"></i>' + m.doctor + '</div>' : '') +
+      (m.notes ? '<div class="med-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + m.notes + '</div>' : '') +
+      '<div style="margin-top:10px;"><span class="tag ' + tagClass(m.status) + '">' + m.status + '</span></div>' +
+      '<div class="med-actions">' +
+      (m.status === 'activo' ? '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-pause"></i> Suspender</button>' : '<button class="btn btn-outline btn-sm" onclick="toggleMed(\'' + m.id + '\')"><i class="fas fa-play"></i> Activar</button>') +
+      '<button class="btn btn-danger btn-sm" onclick="deleteMed(\'' + m.id + '\')"><i class="fas fa-trash"></i></button>' +
+      '</div></div>';
+  }).join('');
 }
 
 function filterMeds(f, el) {
   medFilter = f;
-  document.querySelectorAll('#page-medications .pill-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-medications .pill-tab').forEach(function(t) { t.classList.remove('active'); });
   el.classList.add('active');
   renderMeds();
 }
 
-function viewNoteImg(noteId) {
-  const base64 = localStorage.getItem('se_img_' + noteId);
-  if (base64) { const win = window.open(); win.document.write('<img src="' + base64 + '" style="max-width:100%;"/>'); }
-  else toast('Imagen no encontrada', 'warning');
-}
-
 function populateMedDoctorSelector() {
   const sel = document.getElementById('med-doc-select'); if (!sel) return;
-  sel.innerHTML = '<option value="">— Elegir de mis medicos registrados —</option>';
-  docs.forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.id; opt.textContent = d.name + ' - ' + d.spec;
-    sel.appendChild(opt);
-  });
+  let html = '<option value="">— Elegir de mis medicos registrados —</option>';
+  docs.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + ' - ' + d.spec + '</option>'; });
+  sel.innerHTML = html;
 }
 
 function fillMedDoctor(docId) {
   if (!docId) return;
-  const d = docs.find(x => x.id === docId); if (!d) return;
+  const d = docs.find(function(x) { return x.id === docId; }); if (!d) return;
   document.getElementById('med-doctor').value = d.name;
-};
+}
 
-const saveMed = async function() {
+function saveMed() {
   const name = document.getElementById('med-name').value.trim();
   const dose = document.getElementById('med-dose').value.trim();
   if (!name || !dose) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
-  const m = {id: uid(), name, dose, freq: document.getElementById('med-freq').value, route: document.getElementById('med-route').value, start: document.getElementById('med-start').value, status: document.getElementById('med-status').value, doctor: document.getElementById('med-doctor').value.trim(), notes: document.getElementById('med-notes').value.trim()};
-  meds.unshift(m);
-  await save(KEYS.meds, meds);
+  const m = { id: uid(), name: name, dose: dose, freq: document.getElementById('med-freq').value, route: document.getElementById('med-route').value, start: document.getElementById('med-start').value, status: document.getElementById('med-status').value, doctor: document.getElementById('med-doctor').value.trim(), notes: document.getElementById('med-notes').value.trim() };
+  meds.unshift(m); save(KEYS.meds, meds);
   addActivity('fas fa-pills', '#f0a500', 'Medicamento agregado: ' + name + ' ' + dose);
   closeModal('modal-med');
-  ['med-name','med-dose','med-doctor','med-notes','med-start'].forEach(id => document.getElementById(id).value = '');
+  ['med-name', 'med-dose', 'med-doctor', 'med-notes', 'med-start'].forEach(function(id) { document.getElementById(id).value = ''; });
   const medSel = document.getElementById('med-doc-select'); if (medSel) medSel.value = '';
   renderDashboard(); toast('Medicamento guardado');
-};
+}
 
-const toggleMed = async function(id) {
-  const m = meds.find(x => x.id === id); if (!m) return;
+function toggleMed(id) {
+  const m = meds.find(function(x) { return x.id === id; }); if (!m) return;
   m.status = m.status === 'activo' ? 'suspendido' : 'activo';
-  await save(KEYS.meds, meds);
-  renderMeds(); renderDashboard();
+  save(KEYS.meds, meds); renderMeds(); renderDashboard();
   toast('Medicamento ' + m.status);
-};
+}
 
-const deleteMed = async function(id) {
+function deleteMed(id) {
   if (!confirm('Eliminar este medicamento?')) return;
-  meds = meds.filter(m => m.id !== id);
-  await save(KEYS.meds, meds);
-  renderMeds(); renderDashboard();
+  meds = meds.filter(function(m) { return m.id !== id; });
+  save(KEYS.meds, meds); renderMeds(); renderDashboard();
   toast('Medicamento eliminado');
 }
 
@@ -2262,22 +2076,22 @@ const deleteMed = async function(id) {
 let docSearch = '';
 
 function renderDocs() {
-  let filtered = docs.filter(d => d.name.toLowerCase().includes(docSearch) || d.spec.toLowerCase().includes(docSearch));
+  const filtered = docs.filter(function(d) { return d.name.toLowerCase().includes(docSearch) || d.spec.toLowerCase().includes(docSearch); });
   const grid = document.getElementById('docs-grid');
   const em = document.getElementById('docs-empty');
   if (!filtered.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
   em.style.display = 'none';
-  grid.innerHTML = filtered.map(d =>
-    '<div class="doc-card"><div class="doc-avatar"><i class="fas fa-user-doctor"></i></div>' +
-    '<div class="doc-info"><div class="doc-name">' + d.name + '</div><div class="doc-spec">' + d.spec + '</div>' +
-    (d.phone ? '<div class="doc-detail"><i class="fas fa-phone"></i>' + d.phone + '</div>' : '') +
-    (d.email ? '<div class="doc-detail"><i class="fas fa-envelope"></i>' + d.email + '</div>' : '') +
-    (d.clinic ? '<div class="doc-detail"><i class="fas fa-hospital"></i>' + d.clinic + '</div>' : '') +
-    (d.address ? '<div class="doc-detail"><i class="fas fa-location-dot"></i>' + d.address + '</div>' : '') +
-    (d.notes ? '<div class="doc-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + d.notes + '</div>' : '') +
-    '<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openEditDoc(\'' + d.id + '\')"><i class="fas fa-pen"></i> Editar</button><button class="btn btn-danger btn-sm" onclick="deleteDoc(\'' + d.id + '\')"><i class="fas fa-trash"></i> Eliminar</button></div>' +
-    '</div></div>'
-  ).join('');
+  grid.innerHTML = filtered.map(function(d) {
+    return '<div class="doc-card"><div class="doc-avatar"><i class="fas fa-user-doctor"></i></div>' +
+      '<div class="doc-info"><div class="doc-name">' + d.name + '</div><div class="doc-spec">' + d.spec + '</div>' +
+      (d.phone ? '<div class="doc-detail"><i class="fas fa-phone"></i>' + d.phone + '</div>' : '') +
+      (d.email ? '<div class="doc-detail"><i class="fas fa-envelope"></i>' + d.email + '</div>' : '') +
+      (d.clinic ? '<div class="doc-detail"><i class="fas fa-hospital"></i>' + d.clinic + '</div>' : '') +
+      (d.address ? '<div class="doc-detail"><i class="fas fa-location-dot"></i>' + d.address + '</div>' : '') +
+      (d.notes ? '<div class="doc-detail" style="font-style:italic;"><i class="fas fa-circle-info"></i>' + d.notes + '</div>' : '') +
+      '<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn btn-outline btn-sm" onclick="openEditDoc(\'' + d.id + '\')"><i class="fas fa-pen"></i> Editar</button><button class="btn btn-danger btn-sm" onclick="deleteDoc(\'' + d.id + '\')"><i class="fas fa-trash"></i> Eliminar</button></div>' +
+      '</div></div>';
+  }).join('');
 }
 
 function searchDocs(v) { docSearch = v.toLowerCase(); renderDocs(); }
@@ -2286,12 +2100,12 @@ function openAddDoc() {
   document.getElementById('doc-edit-id').value = '';
   document.getElementById('modal-doc-title').innerHTML = '<i class="fas fa-user-doctor" style="color:var(--primary);margin-right:8px;"></i>Agregar Medico';
   document.getElementById('doc-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar';
-  ['doc-name','doc-spec','doc-phone','doc-email','doc-clinic','doc-address','doc-notes'].forEach(id => document.getElementById(id).value = '');
+  ['doc-name', 'doc-spec', 'doc-phone', 'doc-email', 'doc-clinic', 'doc-address', 'doc-notes'].forEach(function(id) { document.getElementById(id).value = ''; });
   openModal('modal-doc');
 }
 
 function openEditDoc(id) {
-  const d = docs.find(x => x.id === id); if (!d) return;
+  const d = docs.find(function(x) { return x.id === id; }); if (!d) return;
   document.getElementById('doc-edit-id').value = id;
   document.getElementById('modal-doc-title').innerHTML = '<i class="fas fa-pen" style="color:var(--primary);margin-right:8px;"></i>Editar Medico';
   document.getElementById('doc-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
@@ -2303,32 +2117,30 @@ function openEditDoc(id) {
   document.getElementById('doc-address').value = d.address || '';
   document.getElementById('doc-notes').value = d.notes || '';
   openModal('modal-doc');
-};
+}
 
-const saveDoc = async function() {
+function saveDoc() {
   const name = document.getElementById('doc-name').value.trim();
   const spec = document.getElementById('doc-spec').value.trim();
   if (!name || !spec) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
   const editId = document.getElementById('doc-edit-id').value;
-  const fields = {name, spec, phone: document.getElementById('doc-phone').value.trim(), email: document.getElementById('doc-email').value.trim(), clinic: document.getElementById('doc-clinic').value.trim(), address: document.getElementById('doc-address').value.trim(), notes: document.getElementById('doc-notes').value.trim()};
+  const fields = { name: name, spec: spec, phone: document.getElementById('doc-phone').value.trim(), email: document.getElementById('doc-email').value.trim(), clinic: document.getElementById('doc-clinic').value.trim(), address: document.getElementById('doc-address').value.trim(), notes: document.getElementById('doc-notes').value.trim() };
   if (editId) {
-    const d = docs.find(x => x.id === editId);
-    if (d) { Object.assign(d, fields); await save(KEYS.docs, docs); addActivity('fas fa-pen', '#e05252', 'Medico actualizado: ' + name); toast('Medico actualizado'); }
+    const d = docs.find(function(x) { return x.id === editId; });
+    if (d) { Object.assign(d, fields); save(KEYS.docs, docs); addActivity('fas fa-pen', '#e05252', 'Medico actualizado: ' + name); toast('Medico actualizado'); }
   } else {
-    docs.unshift({id: uid(), ...fields});
-    await save(KEYS.docs, docs);
+    fields.id = uid();
+    docs.unshift(fields); save(KEYS.docs, docs);
     addActivity('fas fa-user-doctor', '#e05252', 'Medico agregado: ' + name);
     toast('Medico guardado');
   }
-  closeModal('modal-doc');
-  renderDocs(); renderDashboard();
-};
+  closeModal('modal-doc'); renderDocs(); renderDashboard();
+}
 
-const deleteDoc = async function(id) {
+function deleteDoc(id) {
   if (!confirm('Eliminar este medico?')) return;
-  docs = docs.filter(d => d.id !== id);
-  await save(KEYS.docs, docs);
-  renderDocs(); renderDashboard();
+  docs = docs.filter(function(d) { return d.id !== id; });
+  save(KEYS.docs, docs); renderDocs(); renderDashboard();
   toast('Medico eliminado');
 }
 
@@ -2340,59 +2152,72 @@ function renderNotes() {
   const em = document.getElementById('notes-empty');
   if (!notes.length) { grid.innerHTML = ''; em.style.display = 'block'; return; }
   em.style.display = 'none';
-  const catColors = {General:'tag-gray', Sintomas:'tag-red', Dieta:'tag-green', Ejercicio:'tag-blue', Estado:'tag-yellow', Emergencia:'tag-red'};
-  grid.innerHTML = notes.map(n =>
-    '<div class="note-card"><div class="note-header"><div><div class="note-title">' + n.title + '</div><span class="tag ' + (catColors[n.cat]||'tag-gray') + '" style="margin-top:4px;display:inline-block;">' + n.cat + '</span></div><div class="note-date">' + n.date + '</div></div>' +
-    '<div class="note-body">' + n.body + '</div>' + (n.hasImg ? '<div style="margin-top:10px;"><img src="' + (localStorage.getItem('se_img_' + n.id) || n.imgUrl || '') + '" alt="' + (n.imgName||'imagen') + '" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="viewNoteImg(\'' + n.id + '\')"/></div>' : '') +
-    '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author||'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>'
-  ).join('');
-};
+  const catColors = { General: 'tag-gray', Sintomas: 'tag-red', Dieta: 'tag-green', Ejercicio: 'tag-blue', Estado: 'tag-yellow', Emergencia: 'tag-red' };
+  grid.innerHTML = notes.map(function(n) {
+    const imgBase64 = n.hasImg ? localStorage.getItem('se_img_' + n.id) : null;
+    return '<div class="note-card"><div class="note-header"><div><div class="note-title">' + n.title + '</div><span class="tag ' + (catColors[n.cat] || 'tag-gray') + '" style="margin-top:4px;display:inline-block;">' + n.cat + '</span></div><div class="note-date">' + n.date + '</div></div>' +
+      '<div class="note-body">' + n.body + '</div>' +
+      (n.hasImg && (imgBase64 || n.imgUrl) ? '<div style="margin-top:10px;"><img src="' + (imgBase64 || n.imgUrl) + '" alt="imagen" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;" onclick="viewNoteImg(\'' + n.id + '\')"/></div>' : '') +
+      '<div class="note-footer"><div class="note-author"><i class="fas fa-user"></i>' + (n.author || 'Anonimo') + '</div><button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteNote(\'' + n.id + '\')"><i class="fas fa-trash"></i></button></div></div>';
+  }).join('');
+}
 
-const saveNote = async function() {
+function viewNoteImg(noteId) {
+  const base64 = localStorage.getItem('se_img_' + noteId);
+  const note = notes.find(function(n) { return n.id === noteId; });
+  const src = base64 || (note && note.imgUrl) || '';
+  if (src) { const win = window.open(); win.document.write('<img src="' + src + '" style="max-width:100%;"/>'); }
+  else toast('Imagen no encontrada', 'warning');
+}
+
+function noteImgDrop(e) {
+  e.preventDefault(); document.getElementById('note-img-drop').classList.remove('dragover');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Solo se permiten imagenes', 'warning'); return; }
+  const input = document.getElementById('note-img-input');
+  const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+  noteImgSelected(input);
+}
+
+function noteImgSelected(input) {
+  const file = input.files[0]; if (!file) return;
+  const drop = document.getElementById('note-img-drop');
+  drop.classList.add('has-file');
+  drop.innerHTML = '<i class="fas fa-image" style="color:var(--info);"></i><p>' + file.name + '</p><p class="pdf-size">' + (file.size / 1024).toFixed(0) + ' KB</p>';
+  const preview = document.getElementById('note-img-preview');
+  if (preview) { const reader = new FileReader(); reader.onload = function(e) { preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:8px;margin-top:6px;" alt="preview"/>'; }; reader.readAsDataURL(file); }
+}
+
+function saveNote() {
   const title = document.getElementById('note-title').value.trim();
   const body = document.getElementById('note-body').value.trim();
   if (!title || !body) { toast('Por favor completa los campos obligatorios.', 'warning'); return; }
   const btn = document.getElementById('note-save-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...'; }
-  const n = {id: uid(), title, body, author: document.getElementById('note-author').value.trim() || msUserName || 'Yo', cat: document.getElementById('note-cat').value, date: new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'}), imgUrl: '', imgName: '', hasImg: false};
-  // Upload image if selected
+  const n = { id: uid(), title: title, body: body, author: document.getElementById('note-author').value.trim() || msUserName || 'Yo', cat: document.getElementById('note-cat').value, date: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }), imgUrl: '', hasImg: false };
   const imgInput = document.getElementById('note-img-input');
-  if (imgInput && imgInput.files && imgInput.files[0]) {
-    try {
-      const file = imgInput.files[0];
-      const safeName = n.id + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-      const progress = document.getElementById('note-img-progress');
-      const bar = document.getElementById('note-img-bar');
-      if (progress) progress.style.display = 'block';
-      if (bar) bar.style.width = '30%';
-      const result = await uploadImgLocal(file, n.id);
-      if (bar) bar.style.width = '100%';
-      n.imgUrl = result.url; n.imgName = result.name; n.hasImg = true;
-    } catch(e) {
-      console.warn('Image upload error:', e);
-      toast('Error al subir imagen: ' + e.message, 'warning');
-    }
-  }
-  notes.unshift(n);
-  await save(KEYS.notes, notes);
-  addActivity('fas fa-notes-medical', '#3a8fc4', 'Nueva nota: ' + title + (n.hasImg ? ' (con imagen)' : ''));
-  closeModal('modal-note');
-  ['note-title','note-author','note-body'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('note-cat').value = 'General';
-  if (imgInput) imgInput.value = '';
-  const drop = document.getElementById('note-img-drop');
-  if (drop) { drop.classList.remove('has-file'); drop.innerHTML = '<i class="fas fa-image" style="color:var(--ink3);"></i><p>Haz clic o arrastra una imagen aqui</p><p style="font-size:.72rem;margin-top:2px;">JPG, PNG, GIF - Se guarda en OneDrive</p>'; }
-  const progress = document.getElementById('note-img-progress');
-  if (progress) progress.style.display = 'none';
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar'; }
-  renderDashboard(); renderNotes(); toast(n.hasImg ? 'Nota guardada con imagen' : 'Nota guardada');
-};
+  const imgFile = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+  const uploadPromise = imgFile ? uploadImgLocal(imgFile, n.id).then(function(result) { n.imgUrl = result.url; n.hasImg = true; }).catch(function(e) { toast('Error al subir imagen: ' + e.message, 'warning'); }) : Promise.resolve();
+  uploadPromise.then(function() {
+    notes.unshift(n); save(KEYS.notes, notes);
+    addActivity('fas fa-notes-medical', '#3a8fc4', 'Nueva nota: ' + title + (n.hasImg ? ' (con imagen)' : ''));
+    closeModal('modal-note');
+    ['note-title', 'note-author', 'note-body'].forEach(function(id) { document.getElementById(id).value = ''; });
+    document.getElementById('note-cat').value = 'General';
+    if (imgInput) imgInput.value = '';
+    const drop = document.getElementById('note-img-drop');
+    if (drop) { drop.classList.remove('has-file'); drop.innerHTML = '<i class="fas fa-image" style="color:var(--ink3);"></i><p>Haz clic o arrastra una imagen aqui</p><p style="font-size:.72rem;margin-top:2px;">JPG, PNG, GIF - Se guarda localmente</p>'; }
+    const progress = document.getElementById('note-img-progress'); if (progress) progress.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar'; }
+    renderDashboard(); renderNotes();
+    toast(n.hasImg ? 'Nota guardada con imagen' : 'Nota guardada');
+  });
+}
 
-const deleteNote = async function(id) {
+function deleteNote(id) {
   if (!confirm('Eliminar esta nota?')) return;
-  notes = notes.filter(n => n.id !== id);
-  await save(KEYS.notes, notes);
-  renderNotes(); renderDashboard();
+  notes = notes.filter(function(n) { return n.id !== id; });
+  save(KEYS.notes, notes); renderNotes(); renderDashboard();
   toast('Nota eliminada');
 }
 
@@ -2405,7 +2230,7 @@ function renderRemindersPage() {
   document.getElementById('tog-30min').checked = !!reminderSettings.thirtyMin;
   document.getElementById('tog-morning').checked = !!reminderSettings.morning;
   document.getElementById('morning-time').value = reminderSettings.morningTime || '08:00';
-  ['1day','2hr','30min','morning'].forEach(k => {
+  ['1day', '2hr', '30min', 'morning'].forEach(function(k) {
     const card = document.getElementById('rc-' + k);
     const tog = document.getElementById('tog-' + k);
     if (card && tog) card.classList.toggle('active-reminder', tog.checked);
@@ -2422,7 +2247,7 @@ function saveReminderSettings() {
   reminderSettings.morning = document.getElementById('tog-morning').checked;
   reminderSettings.morningTime = document.getElementById('morning-time').value;
   saveObj('se_reminders', reminderSettings);
-  ['1day','2hr','30min','morning'].forEach(k => {
+  ['1day', '2hr', '30min', 'morning'].forEach(function(k) {
     const card = document.getElementById('rc-' + k);
     const tog = document.getElementById('tog-' + k);
     if (card && tog) card.classList.toggle('active-reminder', tog.checked);
@@ -2434,20 +2259,18 @@ function addMedSchedule() {
   const time = document.getElementById('new-med-time').value;
   const label = document.getElementById('new-med-label').value.trim();
   if (!time || !label) { toast('Ingresa hora y nombre del medicamento', 'warning'); return; }
-  medSchedule.push({id: uid(), time, label});
+  medSchedule.push({ id: uid(), time: time, label: label });
   save(KEYS.medSchedule, medSchedule);
   document.getElementById('new-med-time').value = '';
   document.getElementById('new-med-label').value = '';
-  renderMedScheduleChips();
-  renderDashMedSchedule();
+  renderMedScheduleChips(); renderDashMedSchedule();
   toast('Horario ' + time + ' - ' + label + ' agregado');
 }
 
 function removeMedSchedule(id) {
-  medSchedule = medSchedule.filter(s => s.id !== id);
+  medSchedule = medSchedule.filter(function(s) { return s.id !== id; });
   save(KEYS.medSchedule, medSchedule);
-  renderMedScheduleChips();
-  renderDashMedSchedule();
+  renderMedScheduleChips(); renderDashMedSchedule();
 }
 
 function renderMedScheduleChips() {
@@ -2456,10 +2279,9 @@ function renderMedScheduleChips() {
   if (!chips) return;
   if (!medSchedule.length) { chips.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
   if (empty) empty.style.display = 'none';
-  chips.innerHTML = medSchedule.map(s =>
-    '<div class="time-chip"><i class="fas fa-clock"></i>' + s.time + ' - ' + s.label +
-    '<button onclick="removeMedSchedule(\'' + s.id + '\')" title="Eliminar"><i class="fas fa-xmark"></i></button></div>'
-  ).join('');
+  chips.innerHTML = medSchedule.map(function(s) {
+    return '<div class="time-chip"><i class="fas fa-clock"></i>' + s.time + ' - ' + s.label + '<button onclick="removeMedSchedule(\'' + s.id + '\')" title="Eliminar"><i class="fas fa-xmark"></i></button></div>';
+  }).join('');
 }
 
 function renderNotifHistory() {
@@ -2468,321 +2290,77 @@ function renderNotifHistory() {
   if (!list) return;
   if (!notifications.length) { list.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
   if (empty) empty.style.display = 'none';
-  const urgencyIcon = {urgent:'fas fa-triangle-exclamation', warning:'fas fa-clock', info:'fas fa-calendar-check', med:'fas fa-pills'};
-  const urgencyColor = {urgent:'var(--danger)', warning:'var(--warning)', info:'var(--info)', med:'#8b5cf6'};
+  const urgencyIcon = { urgent: 'fas fa-triangle-exclamation', warning: 'fas fa-clock', info: 'fas fa-calendar-check', med: 'fas fa-pills' };
+  const urgencyColor = { urgent: 'var(--danger)', warning: 'var(--warning)', info: 'var(--info)', med: '#8b5cf6' };
   list.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Titulo</th><th>Descripcion</th><th>Fecha/Hora</th></tr></thead><tbody>' +
-    notifications.slice(0,15).map(n =>
-      '<tr><td><i class="' + (urgencyIcon[n.urgency]||'fas fa-bell') + '" style="color:' + (urgencyColor[n.urgency]||'var(--ink3)') + ';"></i></td>' +
-      '<td><strong>' + n.title + '</strong></td>' +
-      '<td style="font-size:.82rem;">' + n.desc + '</td>' +
-      '<td style="font-size:.78rem;color:var(--ink3);">' + new Date(n.time).toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) + '</td></tr>'
-    ).join('') + '</tbody></table></div>';
-}
-
-// ══════════════════════════════════════════
-//  CALENDAR ICS EXPORT
-// ══════════════════════════════════════════
-function fmtICSDate(date, time) {
-  const d = date.replace(/-/g,'');
-  if (!time) return d;
-  const t = time.replace(':','') + '00';
-  return d + 'T' + t;
-}
-
-function fmtICSDateEnd(date, time) {
-  if (!date) return '';
-  const dt = new Date(date + 'T' + (time||'09:00'));
-  dt.setHours(dt.getHours()+1);
-  const pad = n => String(n).padStart(2,'0');
-  return dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate())+'T'+pad(dt.getHours())+pad(dt.getMinutes())+'00';
-}
-
-function buildICSEvent(a) {
-  const now = new Date();
-  const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+'00Z';
-  const start = fmtICSDate(a.date, a.time);
-  const end = fmtICSDateEnd(a.date, a.time);
-  const patName = settings.patname || 'Elena';
-  return [
-    'BEGIN:VEVENT',
-    'UID:saludelena-' + a.id + '@saludelena',
-    'DTSTAMP:' + stamp,
-    'DTSTART:' + start,
-    'DTEND:' + end,
-    'SUMMARY:Cita medica - ' + a.doctor,
-    'DESCRIPTION:Paciente: ' + patName + '\\nMotivo: ' + a.reason + '\\nEspecialidad: ' + (a.spec||'—') + '\\nNotas: ' + (a.notes||'—'),
-    'LOCATION:' + (a.place||''),
-    'CATEGORIES:SALUD,CITA MEDICA',
-    'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Recordatorio: Cita manana con ' + a.doctor, 'END:VALARM',
-    'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Recordatorio: Cita en 2 horas con ' + a.doctor, 'END:VALARM',
-    'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:Cita en 30 minutos con ' + a.doctor + '!', 'END:VALARM',
-    'END:VEVENT'
-  ].join('\r\n');
-}
-
-function buildICSFile(events) {
-  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Salud Elena//Portal de Salud Elena//ES','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Salud Elena - Citas Medicas','X-WR-TIMEZONE:America/Mexico_City',...events,'END:VCALENDAR'].join('\r\n');
-}
-
-function downloadICS(content, filename) {
-  const blob = new Blob([content], {type:'text/calendar;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function exportApptICS(id) {
-  const a = appts.find(x => x.id === id);
-  if (!a) { toast('Cita no encontrada', 'warning'); return; }
-  if (!a.date || !a.time) { toast('La cita necesita fecha y hora para exportar al calendario', 'warning'); return; }
-  const ics = buildICSFile([buildICSEvent(a)]);
-  downloadICS(ics, 'cita_' + a.doctor.replace(/\s+/g,'_') + '_' + a.date + '.ics');
-  addActivity('fas fa-calendar-arrow-up', '#3a8fc4', 'Cita exportada al calendario: ' + a.doctor);
-  toast('Evento descargado: cita_' + a.date + '.ics');
-}
-
-function exportAllApptICS() {
-  const upcoming = appts.filter(a => (a.status === 'proxima' || a.status === 'próxima') && a.date && a.time);
-  if (!upcoming.length) { toast('No hay citas proximas con fecha y hora para exportar', 'warning'); return; }
-  const ics = buildICSFile(upcoming.map(buildICSEvent));
-  downloadICS(ics, 'salud_elena_citas_' + today() + '.ics');
-  addActivity('fas fa-calendar-arrow-up', '#3a8fc4', upcoming.length + ' cita(s) exportadas al calendario');
-  toast(upcoming.length + ' cita(s) exportadas al calendario');
-}
-
-// ══════════════════════════════════════════
-//  EXPORT DATA
-// ══════════════════════════════════════════
-function exportData() {
-  const data = {records, appts, meds, docs, notes, settings, medSchedule, exportDate: new Date().toISOString()};
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'saludelena_backup_' + today() + '.json'; a.click();
-  toast('Datos exportados');
+    notifications.slice(0, 15).map(function(n) {
+      return '<tr><td><i class="' + (urgencyIcon[n.urgency] || 'fas fa-bell') + '" style="color:' + (urgencyColor[n.urgency] || 'var(--ink3)') + ';"></i></td><td><strong>' + n.title + '</strong></td><td style="font-size:.82rem;">' + n.desc + '</td><td style="font-size:.78rem;color:var(--ink3);">' + new Date(n.time).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
 }
 
 // ══════════════════════════════════════════
 //  SETTINGS PAGE
 // ══════════════════════════════════════════
+function renderSettingsPage() {
+  renderMembersCfgList();
+  const odStatusEl = document.getElementById('od-status-cfg');
+  if (odStatusEl) {
+    if (odTokenValid()) odStatusEl.innerHTML = '<span style="color:var(--primary);"><i class="fas fa-circle-check"></i> OneDrive conectado</span>';
+    else if (localStorage.getItem('se_od_refresh') || EMBEDDED_REFRESH_TOKEN) odStatusEl.innerHTML = '<span style="color:var(--warning);"><i class="fas fa-clock-rotate-left"></i> Token guardado (se renovara automaticamente)</span>';
+    else odStatusEl.innerHTML = '<span style="color:var(--ink3);"><i class="fas fa-circle-xmark"></i> OneDrive no conectado</span>';
+  }
+  const s = settings || {};
+  const patname = document.getElementById('cfg-patname'); if (patname) patname.value = s.patname || '';
+  const dob = document.getElementById('cfg-dob'); if (dob) dob.value = s.dob || '';
+  const blood = document.getElementById('cfg-blood'); if (blood) blood.value = s.blood || '';
+  const allergies = document.getElementById('cfg-allergies'); if (allergies) allergies.value = s.allergies || '';
+}
+
 function renderMembersCfgList() {
-  const list = document.getElementById('members-cfg-list');
-  if (!list) return;
+  const list = document.getElementById('members-cfg-list'); if (!list) return;
   const members = getMembers();
-  list.innerHTML = members.map((m, i) =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">' +
-    '<div class="avatar" style="width:30px;height:30px;font-size:.75rem;">' + m.slice(0,2).toUpperCase() + '</div>' +
-    '<span style="flex:1;font-size:.88rem;">' + m + (m === ADMIN_NAME ? ' <span style="font-size:.7rem;color:var(--primary);font-weight:700;">(admin)</span>' : '') + '</span>' +
-    (m !== ADMIN_NAME ? '<button class="btn btn-danger btn-sm" onclick="removeMemberCfg(' + i + ')"><i class="fas fa-xmark"></i></button>' : '<span style="font-size:.72rem;color:var(--ink3);padding:3px 8px;background:var(--accent);border-radius:10px;">Fijo</span>') +
-    '</div>'
-  ).join('');
+  list.innerHTML = members.map(function(m, i) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">' +
+      '<div class="avatar" style="width:30px;height:30px;font-size:.75rem;">' + m.slice(0, 2).toUpperCase() + '</div>' +
+      '<span style="flex:1;font-size:.88rem;">' + m + (m === ADMIN_NAME ? ' <span style="font-size:.7rem;color:var(--primary);font-weight:700;">(admin)</span>' : '') + '</span>' +
+      (m !== ADMIN_NAME ? '<button class="btn btn-danger btn-sm" onclick="removeMemberCfg(' + i + ')"><i class="fas fa-xmark"></i></button>' : '<span style="font-size:.72rem;color:var(--ink3);padding:3px 8px;background:var(--accent);border-radius:10px;">Fijo</span>') +
+      '</div>';
+  }).join('');
 }
 
 function addMemberCfg() {
   const input = document.getElementById('new-member-name');
-  const name = (input ? input.value.trim() : '');
+  const name = input ? input.value.trim() : '';
   if (!name) { toast('Ingresa un nombre', 'warning'); return; }
   const members = getMembers();
-  if (members.some(m => m.toLowerCase() === name.toLowerCase())) { toast('Este nombre ya existe', 'warning'); return; }
-  members.push(name);
-  saveMembers(members);
+  if (members.some(function(m) { return m.toLowerCase() === name.toLowerCase(); })) { toast('Este nombre ya existe', 'warning'); return; }
+  members.push(name); saveMembers(members);
   if (input) input.value = '';
-  renderMembersCfgList();
-  toast(name + ' agregado');
+  renderMembersCfgList(); toast(name + ' agregado');
 }
 
 function removeMemberCfg(index) {
   const members = getMembers();
   if (members[index] === ADMIN_NAME) { toast('No se puede remover al administrador', 'warning'); return; }
   if (!confirm('Remover a ' + members[index] + '?')) return;
-  members.splice(index, 1);
-  saveMembers(members);
-  renderMembersCfgList();
-  toast('Miembro removido');
+  members.splice(index, 1); saveMembers(members);
+  renderMembersCfgList(); toast('Miembro removido');
 }
 
-function showAdminSetup() {
-  connectOneDriveFromSettings();
-};
-
-const connectOneDriveFromSettings = async function() {
-  const btn = document.getElementById('od-connect-settings-btn');
-  const result = document.getElementById('od-connect-result');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...'; }
-  if (result) result.textContent = '';
-  try {
-    const {verifier, challenge} = await genPKCE();
-    const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
-    localStorage.setItem('se_pkce_v', verifier);
-    localStorage.setItem('se_oauth_s', state);
-    const params = new URLSearchParams({
-      client_id: MS_CLIENT_ID, response_type: 'code',
-      redirect_uri: MS_REDIRECT, scope: MS_SCOPES, state,
-      code_challenge: challenge, code_challenge_method: 'S256',
-      response_mode: 'query', prompt: 'select_account',
-      login_hint: 'CesarJimenez@Cesarja1.onmicrosoft.com'
-    });
-    const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params;
-    const popup = window.open(authUrl, 'od_connect', 'width=520,height=680,left=200,top=80');
-    if (!popup) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive'; }
-      if (result) result.textContent = 'Error: Popup bloqueado. Permite popups para este sitio en la barra de direcciones.';
-      return;
-    }
-    const timer = setInterval(async () => {
-      try {
-        if (popup.closed) {
-          clearInterval(timer);
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
-          return;
-        }
-        const url = popup.location.href;
-        if (url.startsWith(MS_REDIRECT) && url.includes('code=')) {
-          clearInterval(timer); popup.close();
-          const urlParams = new URLSearchParams(new URL(url).search);
-          const code = urlParams.get('code');
-          if (urlParams.get('state') !== localStorage.getItem('se_oauth_s')) { throw new Error('State mismatch'); }
-          if (result) result.textContent = 'Obteniendo token...';
-          const r = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({
-              client_id: MS_CLIENT_ID, grant_type: 'authorization_code',
-              code, redirect_uri: MS_REDIRECT,
-              code_verifier: localStorage.getItem('se_pkce_v')
-            })
-          });
-          const d = await r.json();
-          if (d.access_token) {
-            setOdToken(d.access_token, d.expires_in);
-            if (d.refresh_token) localStorage.setItem('se_od_refresh', d.refresh_token);
-            if (result) result.textContent = 'Conectado! Buscando archivos en SaludElena...';
-            const files = await listOneDriveFiles();
-            if (result) result.textContent = 'Archivos encontrados: ' + (files.length ? files.join(', ') : 'ninguno');
-            const n = await loadFromOneDrive();
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> OneDrive conectado'; btn.style.background = 'var(--primary)'; }
-            renderDashboard();
-            renderSettingsPage();
-            toast(n > 0 ? '✅ ' + n + ' archivos cargados desde OneDrive!' : '⚠️ OneDrive conectado pero no se encontraron datos en SaludElena/');
-          } else {
-            throw new Error(d.error_description || d.error || 'Error de autenticacion');
-          }
-        }
-      } catch(e) { /* cross-origin, keep waiting */ }
-    }, 500);
-    setTimeout(() => {
-      clearInterval(timer);
-      if (!popup.closed) popup.close();
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
-    }, 120000);
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Conectar OneDrive (CesarJimenez@Cesarja1.onmicrosoft.com)'; }
-    if (result) result.textContent = 'Error: ' + e.message;
-  }
-}
-
-function saveUserName() {
-  const name = (document.getElementById('cfg-username') || {}).value || '';
-  if (!name.trim()) { toast('Ingresa tu nombre', 'warning'); return; }
-  localStorage.setItem('se_user_name', name.trim());
-  msUserName = name.trim();
-  document.getElementById('user-name').textContent = name.trim();
-  document.getElementById('user-avatar').textContent = name.trim().slice(0,2).toUpperCase();
-  toast('Nombre guardado');
-}
-
-function renderSettingsPage() {
-  // Load members list
-  renderMembersCfgList();
-  // OneDrive status
-  const odStatusEl = document.getElementById('od-status-cfg');
-  if (odStatusEl) {
-    if (odTokenValid()) odStatusEl.innerHTML = '<span style="color:var(--primary);"><i class="fas fa-circle-check"></i> OneDrive conectado</span>';
-    else if (localStorage.getItem('se_od_refresh')) odStatusEl.innerHTML = '<span style="color:var(--warning);"><i class="fas fa-clock-rotate-left"></i> Token expirado - reconectar</span>';
-    else odStatusEl.innerHTML = '<span style="color:var(--ink3);"><i class="fas fa-circle-xmark"></i> OneDrive no conectado</span>';
-  }
-  // Load patient settings
-  const s = settings || {};
-  const patname = document.getElementById('cfg-patname');
-  const dob = document.getElementById('cfg-dob');
-  const blood = document.getElementById('cfg-blood');
-  const allergies = document.getElementById('cfg-allergies');
-  if (patname) patname.value = s.patname || '';
-  if (dob) dob.value = s.dob || '';
-  if (blood) blood.value = s.blood || '';
-  if (allergies) allergies.value = s.allergies || '';
-}
-
-function renderAuthUsersList() {
-  const list = document.getElementById('auth-users-list');
-  if (!list) return;
-  const emails = getAuthorizedEmails();
-  if (!emails.length) {
-    list.innerHTML = '<div style="font-size:.83rem;color:var(--ink3);padding:10px;background:var(--accent);border-radius:8px;margin-bottom:8px;"><i class="fas fa-unlock" style="margin-right:6px;"></i>Lista vacia - cualquier cuenta Microsoft puede acceder</div>';
-    return;
-  }
-  // Always show admin first (non-removable)
-  const adminRow = '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
-    '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-dark);">AD</div>' +
-    '<div style="flex:1;"><div style="font-size:.88rem;font-weight:600;color:var(--ink);">' + ADMIN_EMAIL + '</div>' +
-    '<div style="font-size:.72rem;color:var(--primary);font-weight:700;">ADMINISTRADOR - Acceso permanente</div></div>' +
-    '<span style="font-size:.72rem;color:var(--ink3);padding:3px 8px;background:var(--accent);border-radius:10px;">Fijo</span>' +
-    '</div>';
-  list.innerHTML = adminRow + emails.map((u, i) => {
-    const email = u.email || u;
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
-      '<div class="avatar" style="width:32px;height:32px;font-size:.75rem;background:var(--primary-light);">' + email.slice(0,2).toUpperCase() + '</div>' +
-      '<div style="flex:1;"><div style="font-size:.88rem;color:var(--ink);">' + email + '</div></div>' +
-      '<button class="btn btn-danger btn-sm" onclick="removeAuthorizedUser(' + i + ')"><i class="fas fa-xmark"></i></button>' +
-      '</div>';
-  }).join('');
-}
-
-function addAuthorizedUser() {
-  const emailEl = document.getElementById('new-auth-email');
-  const btn = document.getElementById('add-auth-btn');
-  const email = (emailEl ? emailEl.value.trim().toLowerCase() : '');
-  if (!email) { toast('Por favor ingresa un email', 'warning'); return; }
-  if (!email.includes('@')) { toast('Email invalido - debe incluir @', 'warning'); return; }
-  const emails = getAuthorizedEmails();
-  if (emails.some(u => (u.email||u).toLowerCase() === email)) { toast('Este email ya esta en la lista', 'warning'); return; }
-  if (email === ADMIN_EMAIL.toLowerCase()) { toast('El administrador siempre tiene acceso automaticamente', 'warning'); return; }
-  // Disable button to prevent double-click
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
-  emails.push(email);
-  // Save locally first (instant feedback)
-  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
-  renderAuthUsersList();
-  if (emailEl) emailEl.value = '';
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Agregar'; }
-  toast(email + ' agregado a usuarios autorizados');
-  // Sync to OneDrive in background (non-blocking)
-  odWriteJsonShared('authorized.json', emails).catch(e => {
-    console.warn('Could not sync to OneDrive:', e);
-    toast('Guardado localmente. Sincronizacion con OneDrive pendiente.', 'warning');
-  });
-}
-
-function removeAuthorizedUser(index) {
-  const emails = getAuthorizedEmails();
-  const user = emails[index];
-  const label = (user.email || user);
-  if (!confirm('Remover a ' + label + ' de usuarios autorizados?')) return;
-  emails.splice(index, 1);
-  // Save locally first
-  localStorage.setItem('se_authorized_emails', JSON.stringify(emails));
-  renderAuthUsersList();
-  toast(label + ' removido de usuarios autorizados');
-  // Sync to OneDrive in background
-  // Authorized emails saved locally
-};
-
-const saveSettings = async function() {
+function saveSettings() {
   settings.patname = (document.getElementById('cfg-patname') || {}).value || '';
   settings.dob = (document.getElementById('cfg-dob') || {}).value || '';
   settings.blood = (document.getElementById('cfg-blood') || {}).value || '';
   settings.allergies = (document.getElementById('cfg-allergies') || {}).value || '';
-  await saveObj(KEYS.settings, settings);
+  saveObj(KEYS.settings, settings);
   toast('Configuracion guardada');
+}
+
+function exportData() {
+  const data = { records: records, appts: appts, meds: meds, docs: docs, notes: notes, settings: settings, medSchedule: medSchedule, exportDate: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'saludelena_backup_' + today() + '.json'; a.click();
+  toast('Datos exportados');
 }
 
 // ══════════════════════════════════════════
@@ -2797,35 +2375,25 @@ function runReminderEngine() {
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-// ── Cache busting: unregister service workers and clear caches ──
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-}
-if ('caches' in window) {
-  caches.keys().then(names => {
-    names.forEach(name => caches.delete(name));
-  });
-}
-
 (function init() {
+  // Clear service workers and caches
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function(regs) { regs.forEach(function(r) { r.unregister(); }); });
+  if ('caches' in window) caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+
   const pinOk = localStorage.getItem('se_pin_ok');
   if (pinOk === '1') {
     msUserName = localStorage.getItem('se_user_name') || 'Usuario';
-    enterPortal(); // async - auto-syncs OneDrive
+    enterPortal();
   } else {
     document.getElementById('login-screen').style.display = 'flex';
     populateMemberSelect();
-    setTimeout(() => {
-      const pinEl = document.getElementById('pin-input');
-      if (pinEl) pinEl.focus();
-    }, 300);
+    setTimeout(function() { const p = document.getElementById('pin-input'); if (p) p.focus(); }, 300);
   }
   runReminderEngine();
   setInterval(runReminderEngine, 60000);
 })();
 </script>
+
 
 </body>
 </html>
