@@ -560,8 +560,11 @@
         <button class="btn btn-outline btn-sm" onclick="pushLocalToOneDrive()" style="width:100%;color:var(--info);border-color:var(--info);margin-bottom:6px;">
           <i class="fas fa-cloud-arrow-up"></i> Subir datos locales a OneDrive
         </button>
-        <button class="btn btn-outline btn-sm" onclick="embedTokenInPortal()" style="width:100%;color:#8b5cf6;border-color:#8b5cf6;">
-          <i class="fas fa-key"></i> Compartir acceso con familia (admin)
+        <button class="btn btn-outline btn-sm" onclick="embedTokenInPortal()" style="width:100%;color:#8b5cf6;border-color:#8b5cf6;margin-bottom:6px;">
+          <i class="fas fa-key"></i> Ver token para compartir
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="downloadPortalWithToken()" style="width:100%;background:#8b5cf6;border:none;">
+          <i class="fas fa-download"></i> Descargar portal con token incluido (recomendado)
         </button>
         <div id="od-connect-result" style="font-size:.78rem;color:var(--ink2);margin-top:8px;line-height:1.5;"></div>
         <hr style="margin:16px 0;border-color:var(--border);"/>
@@ -883,7 +886,7 @@ const OD_PDFS = OD_FOLDER + '/PDFs';
 
 // Token embebido por el admin (evita que la familia tenga que conectar OneDrive)
 // Despues de conectar OneDrive, usa "Compartir acceso" para obtener este token
-const EMBEDDED_REFRESH_TOKEN = '1.AW8BlGttgGHipkiNmKlZ0mgomRD9Ho9cZsNGhbP28KHytwzXAE1vAQ.BQABAwEAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cwIAAAAAAIikhwLeX105XN3ZLqhUmBJW28Hs8RBrDGFSkBa4o6lmikI5QXusHO_Wn5Pt7jcqzA79jFBGEl_Jqix_GJGo7OD4XPbXiOUkSF13nfC5V421ljfun_DbYjRQ5T9TAF-RfMgg6_Y3Fcev5HA1km-wpbqvAqUcDL0qM7GH_IttWaICuj8BVd1Fl3nFvvzKH9zvc3u6k77io6tdjlkrbetsliIxNTGGTqZjwZb-1jgBVr4oU3NQrVQnO5NY87tdeKIrY8Jaqc4LfnCu9CUuPOJAA-e77zUF53qGyx7FJP7zbT-_botsfTmbfDPYh3mCnwEQOe6m9J0D_pTn1JukwPEErLVfG5clOv8et1zTfsEbbK7XParpodLi77ehADc-RiKLEIU9JHIQdl5gh3HFVAshyrM0yGsAknsnadtnCullWvC1mglGK2Hhla0xVwM9eSc8D1Wqbg1XN6IZ0KZwCMh_vinCJ6cItvVYms6EdTyJAtQtVGYeO8-iKV3eQmzmNjRUzUvwB65INkSggiKFJdZUdPdBa5ZC1hPsewgMO-WBnYhWjqBWUChFyiIIB5HS3oroPdQJW1jazgvhKqf_j2wYdyWT0mvfucSwuSOfPI2ajN5p5pfTsde67TRp5kpD4YV--e611NF_Pt3pDjZkMSmGGxLSc2gXXdGesaQwCc3TQiESLlA1gFV6QWbLt3zPg3KnKnp-GZOhh44yd4nPlPrYAaJpmqU38zndyjgOgjEYEaqQRWGKKuclv8jVZ92lO-RANwYRA9RkaxE-4otuf9LfHhObUxs5WpgBW3r6wxWaB2CLnVHaFU7CTLkIK22zGZqfU8pdGIymJnoPr73VAEzlD8u65x9p6OJTd2DwFNPNTGzVFkAAW2u71lQqBxlxrgA8-Wx2UN5G3_Y1j0xka9d7xkO_qfdX9Cy0Q8offM0FQxJBUUGYD36-2UjQSh8kTHduVcHvteHn2ipAqB6LSwmhl1ymgTsAsvCMKO49FEJ6MaYe6ExLIo5O7E2Ecx_bSsA88fvYWI3LhN7xSXlFPVVG5IqurOGYiWYT0eUFKJZzrDh2BwbFnYqPy0gduSo0Xo_LX4np44lI6bVzNV5hOXXxlrMOjgO50Q6iwi336uu80wjT1hkxjhJD8OL3Xh3Ix7UOPf_L-BIPxHMPnDoWj-MqzHBDvn-DrvHek3FqZDlrNEupq6LRb3B-A30BL4ojzqHFAhJUYgwX7bySzBGOSWjZqmwylv2VDjOvXSqZD0n1Nw4zAWR3NL88pObqqOEYhp5bPaqUYhUTR07cEK9Tho0HdWLa4K7Kp96bgZswU-zWkbP5YfgCwmJmboa97FZdtuT-zOA7ruFUJMq1I-Z4eJuO2eSC8VayAo05zC_POHhC32xP7HjrusvHNVkfK54WrzbofoGHbawj9ch1Uddp'; // <- Admin: pega aqui el refresh token
+const EMBEDDED_REFRESH_TOKEN = ''; // <- Admin: pega aqui el refresh token
 
 // ── Miembros ──
 function getMembers() {
