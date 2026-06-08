@@ -883,7 +883,7 @@ const OD_PDFS = OD_FOLDER + '/PDFs';
 
 // Token embebido por el admin (evita que la familia tenga que conectar OneDrive)
 // Despues de conectar OneDrive, usa "Compartir acceso" para obtener este token
-const EMBEDDED_REFRESH_TOKEN = "; 1.AW8BlGttgGHipkiNmKlZ0mgomRD9Ho9cZsNGhbP28KHytwzXAE1vAQ.BQABAwEAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cwIAAAAAAKd8jPSzSfYTQMdKmqVTBDpRHvjvRUWYVHUwOBjz-6GAAxIj20OikBjzjdTQ_trKZ5mX6PxzPzmUqeCdrfL1cCFOpVhKHEI1pZRHEn3PtPdEDmyU8nGbzFMiXT6TM4YqCbc1KmdbfMc-D2beR2VCjH1DdiISb4iudlXMXl2Py0pX6gw9aU6ALBFECvb_fEiWzFC1mkxbLbldH8yUxxML3UzQbmubr-bgvsqEVrv8zAsDrFD5AMPw5dcNcckmJAB3JFnOgS6Gu4U_N3HJDSi9WNZk6dgxLqXX-GteAHDsUUXCU6-8MKthMjtmVpTk7PP6MELheoxs_lLpwa7N-AGZ4OFlLdD-s9EamAGRZEoD-7MngFHtiwtg1mc1Rrpd8VvU56eJLdE_csu__n4Hi_idsA7IAdztBRpS3-Zmp_m0veIZshg1Io9KfZzoxYsA9SyvLhQJGC7UU4hwn7hRlXI0obL7_4u99dinuEBPLQel4Fht_c5oNb2ZoBnWVoocBkOgq2zz3aqyUls0s5Hr3-zWNvJxzos1oICCgV_SN_5KGpoXsPlgnG5VwAg_5lI6ypsTQyHEblsEj-1Ex_d9xo4d2ZygD--1OsWQKCp1x6BFi78xrlctq7me0TY87IqyX9hUYw0CFOD6cD7wB4yKV6IdbkUcc4qcZ6smHv9kt0KkkTzK2f6WstC2WRcosQMhReGlbIwrYPYgDG8KK-5XFqTXcTux7VRad-8J5YcyG8y3Lu3AYBrqkhn-bNWNgHL1MmCxAbJg1ZiVbB90VfTM9tg2s7UnqgT6cJw7BraSNarhjuJOQKBMTBAIyTh_jkvNepOaq9c3tzmQEtCot_2PERhUk3j_srVud-rkwgEK2CRbt80MS1crpDNBitosVaWnBwCHyDBEMbA7THz2CqKnEbaMexipWB8HV2eJeOQA_8z6vv9ZPEhKeaPuTeLqYBGIQMzIjr6yW0JFiiP7j-YcVW5Anhp9IQdDO6T_hrjyl5lWfzKAKjMik7cPo1N0D4oqIwSYFQYmPCaGlKjNt4qFrrq_yGJihMFySL22_-MBOWumEFhjvLFiDMfj3Z6nW5vTTtywUEQv95il7H8vEuNGvSzcrcEy9wnfauuigXPesUM6ycE8QH0B0JQSnbTId3wcbn-O8EJjy0nZoMlHYUcmOsFkHbouoCcIJJRcVr_0pIES7D2mqMGEvU20AjxaJGA1Bryyrm5J0P02F_typUN6uLuU3K1Pp7EKcpKLr8hFITvgpBRI6j5MbhKEzIRmF-sIkjl3-S5-fHk5UxkOr5-N8-tTUrumwz3ckXsDS46Mq37auptsJV97j-zJldfcAGKNz9vU_cerwp7hiJZ7JFmAvRahzj3Z3GJRErcu9809vba3QTAEu87wNfWsIfcpSoCgQsh0MK8CxHUOVKEvvkL4 ; // <- Admin: pega aqui el refresh token
+const EMBEDDED_REFRESH_TOKEN = ''; // <- Admin: pega aqui el refresh token
 
 // ── Miembros ──
 function getMembers() {
@@ -2434,6 +2434,11 @@ function runReminderEngine() {
   // Clear service workers and caches
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function(regs) { regs.forEach(function(r) { r.unregister(); }); });
   if ('caches' in window) caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+
+  // If embedded token exists and no local token, seed it
+  if (EMBEDDED_REFRESH_TOKEN && EMBEDDED_REFRESH_TOKEN !== '' && !localStorage.getItem('se_od_refresh')) {
+    localStorage.setItem('se_od_refresh', EMBEDDED_REFRESH_TOKEN);
+  }
 
   const pinOk = localStorage.getItem('se_pin_ok');
   if (pinOk === '1') {
